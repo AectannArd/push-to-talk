@@ -1,5 +1,6 @@
 mod config;
 mod hotkey;
+mod indicator;
 mod recorder;
 mod transcriber;
 mod tray;
@@ -175,7 +176,8 @@ fn main() -> Result<()> {
         cfg.hotkey.split('+').last().unwrap_or("?"),
     );
 
-    // ---- system tray indicator ---------------------------------------------
+    // ---- recording indicators (console + system tray) -----------------------
+    let indicator = indicator::spawn();
     let tray_icon = tray::spawn();
 
     // ---- load Whisper model ------------------------------------------------
@@ -303,6 +305,7 @@ fn main() -> Result<()> {
     let need_alt = parsed_hotkey.needs_alt;
     let need_win = parsed_hotkey.needs_win;
     let tray = tray_icon;
+    let ind = indicator;
 
     // ---- global-hotkey event loop -------------------------------------------
     if let Err(e) = rdev::listen(move |event| {
@@ -320,6 +323,7 @@ fn main() -> Result<()> {
                 {
                     cb_is_rec.store(true, Ordering::SeqCst);
                     tray.set_recording(true);
+                    ind.set_visible(true);
                     match rec.start() {
                         Ok(r) => {
                             *cb_rec.lock().unwrap() = Some(r);
@@ -329,6 +333,7 @@ fn main() -> Result<()> {
                             error!("❌ Failed to start recording: {e}");
                             cb_is_rec.store(false, Ordering::SeqCst);
                             tray.set_recording(false);
+                    ind.set_visible(false);
                         }
                     }
                 }
@@ -339,6 +344,7 @@ fn main() -> Result<()> {
                 if key == trigger_key && cb_is_rec.load(Ordering::SeqCst) {
                     cb_is_rec.store(false, Ordering::SeqCst);
                     tray.set_recording(false);
+                    ind.set_visible(false);
                     let audio = cb_rec
                         .lock()
                         .unwrap()
