@@ -22,6 +22,10 @@ impl Transcriber {
             );
         }
 
+        // Route whisper.cpp/ggml output through the `log` crate at debug level.
+        // With log_level >= info, this output won't reach the console.
+        whisper_rs::install_logging_hooks();
+
         let params = whisper_rs::WhisperContextParameters::default();
 
         let ctx = whisper_rs::WhisperContext::new_with_params(
@@ -43,7 +47,6 @@ impl Transcriber {
             dur = duration_s,
         );
 
-        // Check audio actually has signal
         let peak = audio.iter().map(|&s| s.abs()).max().unwrap_or(0);
         if peak < 50 {
             log::warn!(
@@ -53,12 +56,10 @@ impl Transcriber {
             );
         }
 
-        // Convert i16 → f32 using whisper-rs utility
         let mut inter_samples = vec![0.0f32; audio.len()];
         whisper_rs::convert_integer_to_float_audio(audio, &mut inter_samples)
             .context("Failed to convert i16 → f32 audio")?;
 
-        // Log f32 range
         let f32_min = inter_samples.iter().cloned().fold(f32::INFINITY, f32::min);
         let f32_max = inter_samples.iter().cloned().fold(f32::NEG_INFINITY, f32::max);
         log::info!("🔍 f32 range: [{f32_min:.6}, {f32_max:.6}]");
@@ -75,9 +76,6 @@ impl Transcriber {
         );
         params.set_translate(false);
 
-        // Language: from config if set, otherwise auto-detect.
-        // whisper.cpp auto-detection: set language to "auto" string WITHOUT
-        // the detect_language flag — combining both can cause 0 segments.
         match self.language.as_deref() {
             Some("auto") | None => {
                 params.set_language(Some("auto"));
@@ -88,15 +86,15 @@ impl Transcriber {
             }
         }
 
+        // Suppress all whisper.cpp output to stderr
         params.set_print_special(false);
         params.set_print_progress(false);
+        params.set_print_realtime(false);
         params.set_print_timestamps(false);
 
-        // Run inference
         let ret = state.full(params, &inter_samples[..])?;
         log::info!("🔍 whisper_full returned: {ret}");
 
-        // Fetch results
         let n_segments = state.full_n_segments();
         let lang_id = state.full_lang_id_from_state();
         log::info!("🔍 Segments: {n_segments}, lang_id: {lang_id}");
@@ -111,7 +109,6 @@ impl Transcriber {
             }
         }
 
-        // Collect text from all segments
         let text: String = state
             .as_iter()
             .map(|seg| seg.to_string())
