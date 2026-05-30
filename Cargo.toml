@@ -1,0 +1,18 @@
+[package]
+name = "push-to-talk"
+version = "0.1.0"
+edition = "2024"
+description = "Push-to-talk voice input for CLI using Whisper"
+
+[dependencies]
+anyhow = "1"
+arboard = "3"
+cpal = "0.15"
+hound = "3"
+whisper-rs = { version = "0.15", features = ["cuda"] }
+rdev = "0.5"
+enigo = "0.2"
+log = "0.4"
+flexi_logger = "0.29"
+serde = { version = "1", features = ["derive"] }
+toml = "0.8"
