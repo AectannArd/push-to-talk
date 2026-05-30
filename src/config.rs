@@ -11,7 +11,14 @@ pub fn default_path() -> PathBuf {
 }
 
 fn default_model_dirs() -> Vec<String> {
-    vec![r"D:\development\models".into(), ".".into()]
+    // Default: ~/.push-to-talk/models/ (next to config.toml) + current dir
+    let home = std::env::var("USERPROFILE")
+        .or_else(|_| std::env::var("HOME"))
+        .map(PathBuf::from)
+        .unwrap_or_else(|_| PathBuf::from("."));
+    vec![
+        home.join(".push-to-talk").join("models").to_string_lossy().to_string(),
+    ]
 }
 
 fn default_hotkey() -> String {

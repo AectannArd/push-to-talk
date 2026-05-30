@@ -60,6 +60,12 @@ fn main() -> Result<()> {
     let cfg_path = cli.config_path.clone();
     let mut cfg = config::Config::load(&cfg_path);
 
+    // ---- expand env vars in log path and create directory if missing ---------
+    let log_dir = expand_env_vars(&cfg.log_dir);
+    if !Path::new(&log_dir).exists() {
+        std::fs::create_dir_all(&log_dir)?;
+    }
+
     // ---- init rolling file logger (configured from config) -------------------
     let _logger_handle = flexi_logger::Logger::try_with_str(&cfg.log_level)
         .unwrap_or_else(|_| {
@@ -68,7 +74,7 @@ fn main() -> Result<()> {
         })
         .log_to_file(
             flexi_logger::FileSpec::default()
-                .directory(&cfg.log_dir)
+                .directory(&log_dir)
                 .basename("push-to-talk"),
         )
         .rotate(
@@ -89,10 +95,7 @@ fn main() -> Result<()> {
     info!("║   Text → auto-type → verify → Enter     ║");
     info!("╚══════════════════════════════════════════╝");
     info!("📁 Config: {}", cfg_path.display());
-    info!(
-        "📁 Logs:   {}",
-        std::env::current_dir().unwrap_or_default().join(&cfg.log_dir).display()
-    );
+    info!("📁 Logs:   {}", log_dir);
     info!(
         "📊 Log level: {}, retention: {}h ({} files)",
         cfg.log_level,
@@ -111,7 +114,7 @@ fn main() -> Result<()> {
 
     // ---- interactive config review ------------------------------------------
     if !cli.non_interactive {
-        review_config(&mut cfg, model_missing);
+        review_config(&mut cfg, model_missing)?;
         cfg.save(&cli.config_path);
     }
 
@@ -311,7 +314,7 @@ fn main() -> Result<()> {
 // ---- config review -------------------------------------------------------
 
 /// Print current config and ask the user if they want to edit it.
-fn review_config(cfg: &mut config::Config, force: bool) {
+fn review_config(cfg: &mut config::Config, force: bool) -> Result<()> {
     eprintln!();
     eprintln!("┌─ Current config ───────────────────────────────────");
     eprintln!(
@@ -341,7 +344,7 @@ fn review_config(cfg: &mut config::Config, force: bool) {
         let mut input = String::new();
         std::io::stdin().read_line(&mut input).ok();
         if !matches!(input.trim().to_lowercase().as_str(), "y" | "yes") {
-            return;
+            return Ok(());
         }
     } else {
         eprintln!("\n⚠  Model not configured or file missing — setup required.");
@@ -371,8 +374,12 @@ fn review_config(cfg: &mut config::Config, force: bool) {
     eprintln!("─── Model selection ──────────────────────────────────");
     let models = scan_all_models(&cfg.model_search_dirs);
     if models.is_empty() {
-        eprintln!("⚠  No ggml-*.bin models found in {:?}", cfg.model_search_dirs);
-        eprintln!("   Download from https://huggingface.co/ggerganov/whisper.cpp");
+        anyhow::bail!(
+            "No ggml-*.bin models found in: {dirs:?}\n\
+             Download a model from https://huggingface.co/ggerganov/whisper.cpp\n\
+             Recommended: ggml-base.bin (~142 MB) or ggml-tiny.bin (~78 MB).",
+            dirs = cfg.model_search_dirs
+        );
     } else {
         eprintln!("┌─ Available models ───────────────────────────────────");
         for (i, m) in models.iter().enumerate() {
@@ -406,7 +413,7 @@ fn review_config(cfg: &mut config::Config, force: bool) {
 
     if force && cfg.model.is_none() {
         eprintln!("⚠  No model selected — will retry on next start.");
-        return;
+        return Ok(());
     }
 
     // -- Remaining settings (skip in force mode unless user wants to) --
@@ -417,11 +424,12 @@ fn review_config(cfg: &mut config::Config, force: bool) {
         input.clear();
         std::io::stdin().read_line(&mut input).ok();
         if !matches!(input.trim().to_lowercase().as_str(), "y" | "yes") {
-            return;
+            return Ok(());
         }
     }
 
     edit_remaining_settings(cfg);
+    Ok(())
 }
 
 /// Interactive editing of all non-model settings.
@@ -678,4 +686,59 @@ fn scan_for_model(root: &Path) -> Option<PathBuf> {
         info!("🔍 Found model: {}", p.display());
     }
     found
+}
+
+/// Expand environment variables in a path string.
+/// Supports `%VAR%` (Windows) and `$VAR` / `${VAR}` (Unix).
+fn expand_env_vars(raw: &str) -> String {
+    let mut result = String::with_capacity(raw.len());
+    let chars: Vec<char> = raw.chars().collect();
+    let mut i = 0;
+
+    while i < chars.len() {
+        if chars[i] == '%' {
+            // Windows-style %VAR%
+            if let Some(end) = chars[i + 1..].iter().position(|&c| c == '%') {
+                let var: String = chars[i + 1..i + 1 + end].iter().collect();
+                let value = std::env::var(&var).unwrap_or_else(|_| {
+                    format!("%{var}%")
+                });
+                result.push_str(&value);
+                i += end + 2;
+                continue;
+            }
+        }
+        if chars[i] == '$' && i + 1 < chars.len() {
+            // Unix-style $VAR or ${VAR}
+            let start = i + 1;
+            if chars[start] == '{' {
+                if let Some(end) = chars[start + 1..].iter().position(|&c| c == '}') {
+                    let var: String = chars[start + 1..start + 1 + end].iter().collect();
+                    let value = std::env::var(&var).unwrap_or_else(|_| {
+                        format!("${{{var}}}")
+                    });
+                    result.push_str(&value);
+                    i += end + 3;
+                    continue;
+                }
+            } else {
+                let end = chars[start..]
+                    .iter()
+                    .position(|&c| !c.is_alphanumeric() && c != '_')
+                    .unwrap_or(chars.len() - start);
+                let var: String = chars[start..start + end].iter().collect();
+                if !var.is_empty() {
+                    let value =
+                        std::env::var(&var).unwrap_or_else(|_| format!("${var}"));
+                    result.push_str(&value);
+                    i += end + 1;
+                    continue;
+                }
+            }
+        }
+        result.push(chars[i]);
+        i += 1;
+    }
+
+    result
 }
