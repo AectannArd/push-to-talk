@@ -455,7 +455,7 @@ fn review_config(cfg: &mut config::Config, force: bool) -> Result<()> {
             } else {
                 ""
             };
-            eprintln!("│ [{i}] {}{mark}", m.display());
+            eprintln!("│ [{n}] {path}{mark}", n = i + 1, path = m.display());
         }
         eprintln!("└──────────────────────────────────────────────────────");
 
@@ -467,8 +467,12 @@ fn review_config(cfg: &mut config::Config, force: bool) -> Result<()> {
         let val = input.trim().to_string();
         if !val.is_empty() {
             if let Ok(idx) = val.parse::<usize>() {
-                if let Some(m) = models.get(idx) {
-                    cfg.model = Some(m.to_string_lossy().to_string());
+                if idx >= 1 {
+                    if let Some(m) = models.get(idx - 1) {
+                        cfg.model = Some(m.to_string_lossy().to_string());
+                    } else {
+                        eprintln!("⚠  Invalid index");
+                    }
                 } else {
                     eprintln!("⚠  Invalid index");
                 }
@@ -511,8 +515,8 @@ fn edit_remaining_settings(cfg: &mut config::Config) {
             for d in &devices {
                 let marker = if d.is_default { " (default)" } else { "" };
                 eprintln!(
-                    "│ [{i}] {name} — {cfg}{marker}",
-                    i = d.index,
+                    "│ [{n}] {name} — {cfg}{marker}",
+                    n = d.index + 1,
                     name = d.name,
                     cfg = d.config,
                 );

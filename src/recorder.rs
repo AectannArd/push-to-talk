@@ -98,19 +98,20 @@ impl Recorder {
                 });
                 let marker = if i == 0 { " (default)" } else { "" };
                 eprintln!(
-                    "│ [{i}] {name} — {cfg}{marker}",
+                    "│ [{n}] {name} — {cfg}{marker}",
+                    n = i + 1,
                     cfg = cfg.as_deref().unwrap_or("n/a"),
                 );
             }
             eprintln!("└──────────────────────────────────────────────────────");
 
-            eprint!("\n🎙  Select device [0]: ");
+            eprint!("\n🎙  Select device [1]: ");
             let mut input = String::new();
             std::io::stdin().read_line(&mut input).ok();
             let input = input.trim().to_string();
             if input.is_empty() {
-                tracing::info!("🎙  Using default device [0]");
-                (devices.into_iter().next().unwrap(), Some("0".to_string()))
+                tracing::info!("🎙  Using default device [1]");
+                (devices.into_iter().next().unwrap(), Some("1".to_string()))
             } else {
                 let chosen = input.clone();
                 (pick_device_by_filter(&devices, &input), Some(chosen))
@@ -235,11 +236,13 @@ fn pick_device_by_filter(devices: &[cpal::Device], filter: &str) -> cpal::Device
         return d.clone();
     }
 
-    // Try numeric index
+    // Try numeric index (1-based from user / config)
     if let Ok(idx) = filter.parse::<usize>() {
-        if let Some(d) = devices.get(idx) {
-            tracing::info!("🎙  Selected device [{idx}]");
-            return d.clone();
+        if idx >= 1 {
+            if let Some(d) = devices.get(idx - 1) {
+                tracing::info!("🎙  Selected device [{idx}]");
+                return d.clone();
+            }
         }
     }
 
