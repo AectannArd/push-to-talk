@@ -100,9 +100,18 @@ fn main() -> Result<()> {
         cfg.log_retention_hours * 60,
     );
 
-    // ---- interactive config review (unless --non-interactive) ---------------
+    // ---- validate model -----------------------------------------------------
+    let model_missing = cfg.model.as_ref().map_or(true, |m| !Path::new(m).exists());
+    if model_missing && cli.non_interactive {
+        anyhow::bail!(
+            "Model not configured or file not found.\n\
+             Run without --non-interactive to set up the model."
+        );
+    }
+
+    // ---- interactive config review ------------------------------------------
     if !cli.non_interactive {
-        review_config(&mut cfg);
+        review_config(&mut cfg, model_missing);
         cfg.save(&cli.config_path);
     }
 
@@ -124,7 +133,12 @@ fn main() -> Result<()> {
     let ind_vis = Arc::new(AtomicBool::new(false));
 
     // ---- load Whisper model ------------------------------------------------
-    let model_path = find_model(&cfg.model_search_dirs)?;
+    let model_path = find_model(&cfg.model, &cfg.model_search_dirs)?;
+    // If model was auto-detected (not from config), save it
+    if cfg.model.is_none() {
+        cfg.model = Some(model_path.to_string_lossy().to_string());
+        cfg.save(&cli.config_path);
+    }
     let transcriber = Transcriber::new(&model_path, cfg.language.clone())?;
 
     // ---- init recorder ------------------------------------------------------
@@ -297,7 +311,7 @@ fn main() -> Result<()> {
 // ---- config review -------------------------------------------------------
 
 /// Print current config and ask the user if they want to edit it.
-fn review_config(cfg: &mut config::Config) {
+fn review_config(cfg: &mut config::Config, force: bool) {
     eprintln!();
     eprintln!("┌─ Current config ───────────────────────────────────");
     eprintln!(
@@ -307,6 +321,10 @@ fn review_config(cfg: &mut config::Config) {
     eprintln!(
         "│ language:           {}",
         cfg.language.as_deref().unwrap_or("auto")
+    );
+    eprintln!(
+        "│ model:              {}",
+        cfg.model.as_deref().unwrap_or("<not set>")
     );
     eprintln!("│ hotkey:             {}", cfg.hotkey);
     eprintln!(
@@ -318,12 +336,97 @@ fn review_config(cfg: &mut config::Config) {
     eprintln!("│ log_retention:      {}h", cfg.log_retention_hours);
     eprintln!("└─────────────────────────────────────────────────────");
 
-    eprint!("\n✏  Edit config? [y/N]: ");
+    if !force {
+        eprint!("\n✏  Edit config? [y/N]: ");
+        let mut input = String::new();
+        std::io::stdin().read_line(&mut input).ok();
+        if !matches!(input.trim().to_lowercase().as_str(), "y" | "yes") {
+            return;
+        }
+    } else {
+        eprintln!("\n⚠  Model not configured or file missing — setup required.");
+    }
+
     let mut input = String::new();
+
+    // -- Step 1: Model search dirs FIRST (before model selection) --
+    eprintln!();
+    eprintln!("─── Model search directories ─────────────────────────");
+    eprintln!("These directories are scanned for ggml-*.bin files.");
+    let cur_dirs = cfg.model_search_dirs.join(", ");
+    eprint!("Directories (comma-separated) [{cur_dirs}]: ");
+    input.clear();
     std::io::stdin().read_line(&mut input).ok();
-    if !matches!(input.trim().to_lowercase().as_str(), "y" | "yes") {
+    let val = input.trim().to_string();
+    if !val.is_empty() {
+        cfg.model_search_dirs = val
+            .split(',')
+            .map(|s| s.trim().to_string())
+            .filter(|s| !s.is_empty())
+            .collect();
+    }
+
+    // -- Step 2: Scan with the (possibly updated) dirs, pick model --
+    eprintln!();
+    eprintln!("─── Model selection ──────────────────────────────────");
+    let models = scan_all_models(&cfg.model_search_dirs);
+    if models.is_empty() {
+        eprintln!("⚠  No ggml-*.bin models found in {:?}", cfg.model_search_dirs);
+        eprintln!("   Download from https://huggingface.co/ggerganov/whisper.cpp");
+    } else {
+        eprintln!("┌─ Available models ───────────────────────────────────");
+        for (i, m) in models.iter().enumerate() {
+            let mark = if Some(&m.to_string_lossy().to_string()) == cfg.model.as_ref() {
+                " ← current"
+            } else {
+                ""
+            };
+            eprintln!("│ [{i}] {}{mark}", m.display());
+        }
+        eprintln!("└──────────────────────────────────────────────────────");
+
+        let cur_model = cfg.model.as_deref().unwrap_or("<not set>");
+        eprintln!("Current: {cur_model}");
+        eprint!("Model index (or Enter to keep): ");
+        input.clear();
+        std::io::stdin().read_line(&mut input).ok();
+        let val = input.trim().to_string();
+        if !val.is_empty() {
+            if let Ok(idx) = val.parse::<usize>() {
+                if let Some(m) = models.get(idx) {
+                    cfg.model = Some(m.to_string_lossy().to_string());
+                } else {
+                    eprintln!("⚠  Invalid index");
+                }
+            } else {
+                eprintln!("⚠  Enter a numeric index");
+            }
+        }
+    }
+
+    if force && cfg.model.is_none() {
+        eprintln!("⚠  No model selected — will retry on next start.");
         return;
     }
+
+    // -- Remaining settings (skip in force mode unless user wants to) --
+    if force {
+        eprintln!();
+        eprintln!("─── Remaining settings ───────────────────────────────");
+        eprint!("Review other settings? [y/N]: ");
+        input.clear();
+        std::io::stdin().read_line(&mut input).ok();
+        if !matches!(input.trim().to_lowercase().as_str(), "y" | "yes") {
+            return;
+        }
+    }
+
+    edit_remaining_settings(cfg);
+}
+
+/// Interactive editing of all non-model settings.
+fn edit_remaining_settings(cfg: &mut config::Config) {
+    let mut input = String::new();
 
     // -- Edit device --
     eprintln!();
@@ -343,10 +446,6 @@ fn review_config(cfg: &mut config::Config) {
         }
         Err(e) => eprintln!("⚠  Could not list devices: {e}"),
     }
-    eprintln!(
-        "Current device: {}",
-        cfg.device.as_deref().unwrap_or("<prompt on startup>")
-    );
     let cur_dev = cfg.device.as_deref().unwrap_or_default();
     eprint!("Device [{cur_dev}]: ");
     input.clear();
@@ -363,9 +462,9 @@ fn review_config(cfg: &mut config::Config) {
     eprint!("Language [{cur_lang}]: ");
     input.clear();
     std::io::stdin().read_line(&mut input).ok();
-    let val = input.trim().to_string();
-    if !val.is_empty() {
-        cfg.language = Some(val);
+    let lang_val = input.trim().to_string();
+    if !lang_val.is_empty() {
+        cfg.language = Some(lang_val);
     }
 
     // -- Edit hotkey --
@@ -377,27 +476,10 @@ fn review_config(cfg: &mut config::Config) {
     std::io::stdin().read_line(&mut input).ok();
     let val = input.trim().to_string();
     if !val.is_empty() {
-        // Validate
         match hotkey::parse_hotkey(&val) {
             Ok(_) => cfg.hotkey = val,
             Err(e) => eprintln!("⚠  Invalid hotkey: {e} — keeping current"),
         }
-    }
-
-    // -- Edit model search dirs --
-    eprintln!();
-    eprintln!("Model search directories (comma-separated):");
-    let cur_dirs = cfg.model_search_dirs.join(", ");
-    eprint!("Dirs [{cur_dirs}]: ");
-    input.clear();
-    std::io::stdin().read_line(&mut input).ok();
-    let val = input.trim().to_string();
-    if !val.is_empty() {
-        cfg.model_search_dirs = val
-            .split(',')
-            .map(|s| s.trim().to_string())
-            .filter(|s| !s.is_empty())
-            .collect();
     }
 
     // -- Edit log dir --
@@ -489,18 +571,33 @@ fn modifier_match(needed: bool, actual: bool) -> bool {
     }
 }
 
-/// Discover the Whisper model file using configurable search directories.
-fn find_model(dirs: &[String]) -> Result<PathBuf> {
-    // WHISPER_MODEL env var still works as an override
+/// Discover the Whisper model file.
+///
+/// 1. `WHISPER_MODEL` env var (exact path)
+/// 2. `explicit_path` from config (exact path)
+/// 3. Scan `search_dirs` for `ggml-*.bin`, pick the first one
+fn find_model(explicit_path: &Option<String>, search_dirs: &[String]) -> Result<PathBuf> {
+    // 1. Env var override
     if let Ok(p) = std::env::var("WHISPER_MODEL") {
         let path = PathBuf::from(&p);
         if path.exists() {
             return Ok(path);
         }
-        warn!("WHISPER_MODEL={p} does not exist, scanning…");
+        warn!("WHISPER_MODEL={p} does not exist");
     }
 
-    for dir in dirs {
+    // 2. Explicit model from config
+    if let Some(p) = explicit_path {
+        let path = PathBuf::from(p);
+        if path.exists() {
+            info!("🔍 Using model from config: {}", path.display());
+            return Ok(path);
+        }
+        warn!("Configured model not found at {p}, scanning…");
+    }
+
+    // 3. Scan directories
+    for dir in search_dirs {
         if let Some(path) = scan_for_model(Path::new(dir)) {
             return Ok(path);
         }
@@ -508,10 +605,43 @@ fn find_model(dirs: &[String]) -> Result<PathBuf> {
 
     anyhow::bail!(
         "No Whisper model (ggml-*.bin) found in: {dirs:?}\n\
-         Download: curl -LO https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-base.bin\n\
-         Or add the directory to model_search_dirs in the config.",
-        dirs = dirs,
+         Download: curl -LO https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-base.bin",
+        dirs = search_dirs,
     );
+}
+
+/// Scan directories for all ggml-*.bin files, returning full paths.
+pub fn scan_all_models(dirs: &[String]) -> Vec<PathBuf> {
+    let mut models = Vec::new();
+    for dir in dirs {
+        let root = Path::new(dir);
+        if !root.exists() {
+            continue;
+        }
+        collect_models(root, 0, &mut models);
+    }
+    models
+}
+
+fn collect_models(dir: &Path, depth: u32, out: &mut Vec<PathBuf>) {
+    if depth > 3 {
+        return;
+    }
+    if let Ok(entries) = std::fs::read_dir(dir) {
+        for entry in entries.filter_map(|e| e.ok()) {
+            let path = entry.path();
+            if path.is_dir() {
+                collect_models(&path, depth + 1, out);
+            } else if path
+                .file_name()
+                .and_then(|n| n.to_str())
+                .map(|n| n.starts_with("ggml-") && n.ends_with(".bin"))
+                .unwrap_or(false)
+            {
+                out.push(path);
+            }
+        }
+    }
 }
 
 /// Recursively scan `root` (up to 3 levels deep) for `ggml-*.bin` files.

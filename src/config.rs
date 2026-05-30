@@ -40,7 +40,11 @@ pub struct Config {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub language: Option<String>,
 
-    /// Directories to scan for ggml-*.bin model files.
+    /// Specific model file path. If set and exists, skip directory scanning.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub model: Option<String>,
+
+    /// Directories to scan for ggml-*.bin model files (used if `model` is not set).
     #[serde(default = "default_model_dirs")]
     pub model_search_dirs: Vec<String>,
 
@@ -66,6 +70,7 @@ impl Default for Config {
         Self {
             device: None,
             language: None,
+            model: None,
             model_search_dirs: default_model_dirs(),
             hotkey: default_hotkey(),
             log_dir: default_log_dir(),
