@@ -17,12 +17,14 @@ use transcriber::Transcriber;
 struct Cli {
     config_path: PathBuf,
     non_interactive: bool,
+    debug_voice_record: bool,
 }
 
 fn parse_args() -> Cli {
     let args: Vec<String> = std::env::args().collect();
     let mut config_path: Option<PathBuf> = None;
     let mut non_interactive = false;
+    let mut debug_voice_record = false;
     let mut i = 1;
 
     while i < args.len() {
@@ -36,6 +38,7 @@ fn parse_args() -> Cli {
                 }
             }
             "--non-interactive" => non_interactive = true,
+            "--debug-voice-record" => debug_voice_record = true,
             other if other.starts_with("--config=") => {
                 config_path = Some(PathBuf::from(&other[9..]));
             }
@@ -47,6 +50,7 @@ fn parse_args() -> Cli {
     Cli {
         config_path: config_path.unwrap_or_else(config::default_path),
         non_interactive,
+        debug_voice_record,
     }
 }
 
@@ -202,9 +206,24 @@ fn main() -> Result<()> {
 
     let (tx, rx) = mpsc::channel::<Vec<i16>>();
 
+    // ---- voice-records directory (sibling to log dir) -----------------------
+    let voice_records_dir = if cli.debug_voice_record {
+        let vr_dir = Path::new(&log_dir)
+            .parent()
+            .unwrap_or(Path::new("."))
+            .join("voice-records");
+        std::fs::create_dir_all(&vr_dir)?;
+        info!("🎙  Voice records: {}", vr_dir.display());
+        Some(vr_dir)
+    } else {
+        None
+    };
+
     // ---- transcription background thread ------------------------------------
     let tr = Arc::new(transcriber);
     let tr_clone = tr.clone();
+    let save_wav = cli.debug_voice_record;
+    let wav_dir = voice_records_dir.clone();
 
     std::thread::spawn(move || {
         for audio in rx {
@@ -222,21 +241,26 @@ fn main() -> Result<()> {
                 rms / i16::MAX as f64 * 100.0,
             );
 
-            let debug_path = std::env::temp_dir().join("push-to-talk-debug.wav");
-            if let Ok(mut writer) = hound::WavWriter::create(
-                &debug_path,
-                hound::WavSpec {
-                    channels: 1,
-                    sample_rate: 16_000,
-                    bits_per_sample: 16,
-                    sample_format: hound::SampleFormat::Int,
-                },
-            ) {
-                for &s in &audio {
-                    let _ = writer.write_sample(s);
+            if save_wav {
+                if let Some(ref dir) = wav_dir {
+                    let ts = chrono::Local::now().format("%Y%m%d_%H%M%S");
+                    let path = dir.join(format!("push-to-talk_{ts}.wav"));
+                    if let Ok(mut writer) = hound::WavWriter::create(
+                        &path,
+                        hound::WavSpec {
+                            channels: 1,
+                            sample_rate: 16_000,
+                            bits_per_sample: 16,
+                            sample_format: hound::SampleFormat::Int,
+                        },
+                    ) {
+                        for &s in &audio {
+                            let _ = writer.write_sample(s);
+                        }
+                        let _ = writer.finalize();
+                        info!("💾 Saved voice record: {}", path.display());
+                    }
                 }
-                let _ = writer.finalize();
-                info!("💾 Saved debug WAV: {}", debug_path.display());
             }
 
             let transcription_span = tracing::info_span!("transcribe");
