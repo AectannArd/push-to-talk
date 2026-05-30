@@ -12,7 +12,10 @@ hound = "3"
 whisper-rs = { version = "0.15", features = ["cuda", "log_backend"] }
 rdev = "0.5"
 enigo = "0.2"
-log = "0.4"
-flexi_logger = "0.29"
+log = "0.4"                       # whisper-rs log_backend writes here
+tracing = "0.1"
+tracing-log = "0.2"
+tracing-subscriber = { version = "0.3", features = ["env-filter", "fmt"] }
+tracing-appender = "0.2"
 serde = { version = "1", features = ["derive"] }
 toml = "0.8"

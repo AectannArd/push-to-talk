@@ -5,11 +5,11 @@ mod recorder;
 mod transcriber;
 
 use anyhow::Result;
-use log::{error, info, warn};
 use recorder::Recorder;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{mpsc, Arc, Mutex};
+use tracing::{error, info, warn};
 use transcriber::Transcriber;
 
 // ---- CLI -----------------------------------------------------------------
@@ -62,32 +62,55 @@ fn main() -> Result<()> {
 
     // ---- expand env vars in log path and create directory if missing ---------
     let log_dir = expand_env_vars(&cfg.log_dir);
-    if !Path::new(&log_dir).exists() {
-        std::fs::create_dir_all(&log_dir)?;
-    }
+    std::fs::create_dir_all(&log_dir)?;
 
-    // ---- init rolling file logger (configured from config) -------------------
-    let _logger_handle = flexi_logger::Logger::try_with_str(&cfg.log_level)
+    // ---- init tracing subscriber (rolling file + console) -------------------
+    let file_appender = tracing_appender::rolling::RollingFileAppender::new(
+        tracing_appender::rolling::Rotation::MINUTELY,
+        &log_dir,
+        "push-to-talk.log",
+    );
+    let (non_blocking, _flush_guard) = tracing_appender::non_blocking(file_appender);
+
+    let filter = tracing_subscriber::EnvFilter::try_new(&cfg.log_level)
         .unwrap_or_else(|_| {
-            eprintln!("⚠  Invalid log_level '{}', falling back to 'info'", cfg.log_level);
-            flexi_logger::Logger::try_with_str("info").unwrap()
-        })
-        .log_to_file(
-            flexi_logger::FileSpec::default()
-                .directory(&log_dir)
-                .basename("push-to-talk"),
+            eprintln!(
+                "⚠  Invalid log_level '{}', falling back to 'error'",
+                cfg.log_level
+            );
+            tracing_subscriber::EnvFilter::new("error")
+        });
+
+    use tracing_subscriber::layer::SubscriberExt;
+    use tracing_subscriber::util::SubscriberInitExt;
+    tracing_subscriber::registry()
+        .with(filter)
+        .with(
+            tracing_subscriber::fmt::layer()
+                .with_writer(std::io::stderr)
+                .with_target(false),
         )
-        .rotate(
-            flexi_logger::Criterion::Age(flexi_logger::Age::Minute),
-            flexi_logger::Naming::Timestamps,
-            flexi_logger::Cleanup::KeepLogFiles(
-                (cfg.log_retention_hours * 60) as usize, // 1-min rotation × N hours
-            ),
+        .with(
+            tracing_subscriber::fmt::layer()
+                .with_writer(non_blocking)
+                .with_ansi(false)
+                .with_target(false),
         )
-        .duplicate_to_stderr(flexi_logger::Duplicate::All)
-        .format_for_files(flexi_logger::detailed_format)
-        .format_for_stderr(flexi_logger::colored_default_format)
-        .start()?;
+        .init();
+
+    // Bridge log -> tracing so whisper-rs log_backend output is captured
+    tracing_log::LogTracer::init().ok();
+
+    // Cleanup old log files
+    cleanup_old_logs(&log_dir, cfg.log_retention_hours);
+
+    // Spawn periodic cleanup
+    let cleanup_dir = log_dir.clone();
+    let cleanup_hours = cfg.log_retention_hours;
+    std::thread::spawn(move || loop {
+        std::thread::sleep(std::time::Duration::from_secs(600)); // every 10 min
+        cleanup_old_logs(&cleanup_dir, cleanup_hours);
+    });
 
     info!("╔══════════════════════════════════════════╗");
     info!("║   🎙  Push-to-Talk CLI                   ║");
@@ -97,10 +120,9 @@ fn main() -> Result<()> {
     info!("📁 Config: {}", cfg_path.display());
     info!("📁 Logs:   {}", log_dir);
     info!(
-        "📊 Log level: {}, retention: {}h ({} files)",
+        "📊 Log level: {}, retention: {}h",
         cfg.log_level,
         cfg.log_retention_hours,
-        cfg.log_retention_hours * 60,
     );
 
     // ---- validate model -----------------------------------------------------
@@ -199,6 +221,8 @@ fn main() -> Result<()> {
                 info!("💾 Saved debug WAV: {}", debug_path.display());
             }
 
+            let transcription_span = tracing::info_span!("transcribe");
+            let _guard = transcription_span.enter();
             match tr_clone.transcribe(&audio) {
                 Ok(text) if text.is_empty() => {
                     warn!("⚠  No speech detected — try again.");
@@ -686,6 +710,34 @@ fn scan_for_model(root: &Path) -> Option<PathBuf> {
         info!("🔍 Found model: {}", p.display());
     }
     found
+}
+
+/// Delete rotated log files older than `max_age_hours`.
+fn cleanup_old_logs(dir: &str, max_age_hours: u64) {
+    let dir = Path::new(dir);
+    if !dir.exists() {
+        return;
+    }
+    let Some(cutoff) = std::time::SystemTime::now()
+        .checked_sub(std::time::Duration::from_secs(max_age_hours * 3600))
+    else {
+        return;
+    };
+    if let Ok(entries) = std::fs::read_dir(dir) {
+        for entry in entries.filter_map(|e| e.ok()) {
+            let path = entry.path();
+            if path.extension().map_or(true, |e| e != "log") {
+                continue;
+            }
+            if let Ok(meta) = entry.metadata() {
+                if let Ok(modified) = meta.modified() {
+                    if modified < cutoff {
+                        let _ = std::fs::remove_file(&path);
+                    }
+                }
+            }
+        }
+    }
 }
 
 /// Expand environment variables in a path string.

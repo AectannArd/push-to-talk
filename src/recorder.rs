@@ -16,7 +16,7 @@ impl Recording {
     pub fn stop(self) -> Vec<i16> {
         drop(self.stream); // stops the stream
         if !self.has_signal.load(Ordering::Relaxed) {
-            log::warn!("⚠  All audio samples were zero — is the mic muted?");
+            tracing::warn!("⚠  All audio samples were zero — is the mic muted?");
         }
         Arc::into_inner(self.buffer)
             .unwrap()
@@ -109,7 +109,7 @@ impl Recorder {
             std::io::stdin().read_line(&mut input).ok();
             let input = input.trim().to_string();
             if input.is_empty() {
-                log::info!("🎙  Using default device [0]");
+                tracing::info!("🎙  Using default device [0]");
                 (devices.into_iter().next().unwrap(), Some("0".to_string()))
             } else {
                 let chosen = input.clone();
@@ -121,7 +121,7 @@ impl Recorder {
         let native_channels = default_config.channels();
         let native_sample_rate = default_config.sample_rate().0;
 
-        log::info!(
+        tracing::info!(
             "🎙  Using: {name} | {ch} ch, {rate} Hz → mono 16 kHz",
             name = device.name().unwrap_or_else(|_| "<unknown>".into()),
             ch = native_channels,
@@ -165,7 +165,7 @@ impl Recorder {
             buffer_size: cpal::BufferSize::Default,
         };
 
-        let err_fn = |err| log::error!("⚠  Audio stream error: {err}");
+        let err_fn = |err| tracing::error!("⚠  Audio stream error: {err}");
 
         let stream = self.device.build_input_stream(
             &stream_config,
@@ -181,7 +181,7 @@ impl Recorder {
                         .take(4 * channels)
                         .map(|v| format!("{v:+.6}"))
                         .collect();
-                    log::info!(
+                    tracing::info!(
                         "🔬 Raw audio (first {n} samples): [{s}]",
                         n = 4 * channels,
                         s = preview.join(", "),
@@ -231,19 +231,19 @@ fn pick_device_by_filter(devices: &[cpal::Device], filter: &str) -> cpal::Device
             .map(|n| n.to_lowercase().contains(&filter_lower))
             .unwrap_or(false)
     }) {
-        log::info!("🎙  Matched device by name: {filter}");
+        tracing::info!("🎙  Matched device by name: {filter}");
         return d.clone();
     }
 
     // Try numeric index
     if let Ok(idx) = filter.parse::<usize>() {
         if let Some(d) = devices.get(idx) {
-            log::info!("🎙  Selected device [{idx}]");
+            tracing::info!("🎙  Selected device [{idx}]");
             return d.clone();
         }
     }
 
     // Fallback
-    log::warn!("🎙  '{filter}' — no match, using default [0]");
+    tracing::warn!("🎙  '{filter}' — no match, using default [0]");
     devices.first().cloned().unwrap()
 }

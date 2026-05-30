@@ -91,22 +91,22 @@ impl Config {
     /// Load config from `path`. Returns defaults if file doesn't exist or can't be parsed.
     pub fn load(path: &Path) -> Self {
         if !path.exists() {
-            log::info!("📄 No config at {path}, using defaults", path = path.display());
+            tracing::info!("📄 No config at {path}, using defaults", path = path.display());
             return Self::default();
         }
         match std::fs::read_to_string(path) {
             Ok(content) => match toml::from_str(&content) {
                 Ok(cfg) => {
-                    log::info!("📄 Loaded config: {path}", path = path.display());
+                    tracing::info!("📄 Loaded config: {path}", path = path.display());
                     cfg
                 }
                 Err(e) => {
-                    log::warn!("Failed to parse config: {e} — using defaults");
+                    tracing::warn!("Failed to parse config: {e} — using defaults");
                     Self::default()
                 }
             },
             Err(e) => {
-                log::warn!("Failed to read config: {e} — using defaults");
+                tracing::warn!("Failed to read config: {e} — using defaults");
                 Self::default()
             }
         }
@@ -117,7 +117,7 @@ impl Config {
         if let Some(parent) = path.parent() {
             if !parent.exists() {
                 if let Err(e) = std::fs::create_dir_all(parent) {
-                    log::error!("Failed to create config dir: {e}");
+                    tracing::error!("Failed to create config dir: {e}");
                     return;
                 }
             }
@@ -125,12 +125,12 @@ impl Config {
         match toml::to_string_pretty(self) {
             Ok(content) => {
                 if let Err(e) = std::fs::write(path, &content) {
-                    log::error!("Failed to write config: {e}");
+                    tracing::error!("Failed to write config: {e}");
                 } else {
-                    log::info!("💾 Config saved: {path}", path = path.display());
+                    tracing::info!("💾 Config saved: {path}", path = path.display());
                 }
             }
-            Err(e) => log::error!("Failed to serialise config: {e}"),
+            Err(e) => tracing::error!("Failed to serialise config: {e}"),
         }
     }
 }

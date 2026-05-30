@@ -34,14 +34,14 @@ impl Transcriber {
         )
         .context("Failed to load Whisper model — the file may be corrupted or unsupported.")?;
 
-        log::info!("✅ Whisper model loaded: {}", model_path.display());
+        tracing::info!("✅ Whisper model loaded: {}", model_path.display());
         Ok(Self { ctx, language })
     }
 
     /// Transcribe 16 kHz mono PCM-i16 samples into text.
     pub fn transcribe(&self, audio: &[i16]) -> Result<String> {
         let duration_s = audio.len() as f64 / 16_000.0;
-        log::info!(
+        tracing::info!(
             "🔍 Transcribing {n} samples ({dur:.2}s)",
             n = audio.len(),
             dur = duration_s,
@@ -49,7 +49,7 @@ impl Transcriber {
 
         let peak = audio.iter().map(|&s| s.abs()).max().unwrap_or(0);
         if peak < 50 {
-            log::warn!(
+            tracing::warn!(
                 "🔍 Audio peak is only {peak} (out of {max}) — \
                  audio may be too quiet or empty",
                 max = i16::MAX,
@@ -62,7 +62,7 @@ impl Transcriber {
 
         let f32_min = inter_samples.iter().cloned().fold(f32::INFINITY, f32::min);
         let f32_max = inter_samples.iter().cloned().fold(f32::NEG_INFINITY, f32::max);
-        log::info!("🔍 f32 range: [{f32_min:.6}, {f32_max:.6}]");
+        tracing::info!("🔍 f32 range: [{f32_min:.6}, {f32_max:.6}]");
 
         let mut state = self.ctx.create_state()?;
 
@@ -82,7 +82,7 @@ impl Transcriber {
             }
             Some(code) => {
                 params.set_language(Some(code));
-                log::info!("🌐 Language forced: {code}");
+                tracing::info!("🌐 Language forced: {code}");
             }
         }
 
@@ -93,15 +93,15 @@ impl Transcriber {
         params.set_print_timestamps(false);
 
         let ret = state.full(params, &inter_samples[..])?;
-        log::info!("🔍 whisper_full returned: {ret}");
+        tracing::info!("🔍 whisper_full returned: {ret}");
 
         let n_segments = state.full_n_segments();
         let lang_id = state.full_lang_id_from_state();
-        log::info!("🔍 Segments: {n_segments}, lang_id: {lang_id}");
+        tracing::info!("🔍 Segments: {n_segments}, lang_id: {lang_id}");
 
         for i in 0..n_segments {
             if let Some(seg) = state.get_segment(i) {
-                log::info!(
+                tracing::info!(
                     "🔍 seg[{i}]: \"{text}\" (no_speech_prob={nsp:.4})",
                     text = seg.to_string(),
                     nsp = seg.no_speech_probability(),
@@ -116,7 +116,7 @@ impl Transcriber {
 
         let trimmed = text.trim().to_string();
         if trimmed.is_empty() {
-            log::warn!(
+            tracing::warn!(
                 "🔍 Empty transcription result — {n_segments} segments, \
                  {dur:.2}s of audio",
                 n_segments = n_segments,
