@@ -1,8 +1,8 @@
 mod config;
 mod hotkey;
-mod indicator;
 mod recorder;
 mod transcriber;
+mod tray;
 
 use anyhow::Result;
 use recorder::Recorder;
@@ -175,9 +175,8 @@ fn main() -> Result<()> {
         cfg.hotkey.split('+').last().unwrap_or("?"),
     );
 
-    // ---- on-screen recording indicator -------------------------------------
-    let indicator = indicator::spawn();
-    let ind_vis = Arc::new(AtomicBool::new(false));
+    // ---- system tray indicator ---------------------------------------------
+    let tray_icon = tray::spawn();
 
     // ---- load Whisper model ------------------------------------------------
     let model_path = find_model(&cfg.model, &cfg.model_search_dirs)?;
@@ -303,8 +302,7 @@ fn main() -> Result<()> {
     let need_shift = parsed_hotkey.needs_shift;
     let need_alt = parsed_hotkey.needs_alt;
     let need_win = parsed_hotkey.needs_win;
-    let cb_ind = ind_vis.clone();
-    let ind = indicator;
+    let tray = tray_icon;
 
     // ---- global-hotkey event loop -------------------------------------------
     if let Err(e) = rdev::listen(move |event| {
@@ -321,8 +319,7 @@ fn main() -> Result<()> {
                     && !cb_is_rec.load(Ordering::SeqCst)
                 {
                     cb_is_rec.store(true, Ordering::SeqCst);
-                    cb_ind.store(true, Ordering::SeqCst);
-                    ind.set_visible(true);
+                    tray.set_recording(true);
                     match rec.start() {
                         Ok(r) => {
                             *cb_rec.lock().unwrap() = Some(r);
@@ -331,8 +328,7 @@ fn main() -> Result<()> {
                         Err(e) => {
                             error!("❌ Failed to start recording: {e}");
                             cb_is_rec.store(false, Ordering::SeqCst);
-                            cb_ind.store(false, Ordering::SeqCst);
-                            ind.set_visible(false);
+                            tray.set_recording(false);
                         }
                     }
                 }
@@ -342,8 +338,7 @@ fn main() -> Result<()> {
                 update_modifier_state(&key, false, &cb_ctrl, &cb_shift, &cb_alt, &cb_win);
                 if key == trigger_key && cb_is_rec.load(Ordering::SeqCst) {
                     cb_is_rec.store(false, Ordering::SeqCst);
-                    cb_ind.store(false, Ordering::SeqCst);
-                    ind.set_visible(false);
+                    tray.set_recording(false);
                     let audio = cb_rec
                         .lock()
                         .unwrap()
