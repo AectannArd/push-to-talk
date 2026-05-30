@@ -55,17 +55,28 @@ fn parse_args() -> Cli {
 fn main() -> Result<()> {
     let cli = parse_args();
 
-    // ---- init rolling file logger (rotates every 1 minute) -----------------
-    let _logger_handle = flexi_logger::Logger::try_with_str("info")?
+    // ---- load config (ahead of logger, so we can use its log settings) -----
+    // Note: log macros before logger init are silently discarded.
+    let cfg_path = cli.config_path.clone();
+    let mut cfg = config::Config::load(&cfg_path);
+
+    // ---- init rolling file logger (configured from config) -------------------
+    let _logger_handle = flexi_logger::Logger::try_with_str(&cfg.log_level)
+        .unwrap_or_else(|_| {
+            eprintln!("⚠  Invalid log_level '{}', falling back to 'info'", cfg.log_level);
+            flexi_logger::Logger::try_with_str("info").unwrap()
+        })
         .log_to_file(
             flexi_logger::FileSpec::default()
-                .directory("logs")
+                .directory(&cfg.log_dir)
                 .basename("push-to-talk"),
         )
         .rotate(
             flexi_logger::Criterion::Age(flexi_logger::Age::Minute),
             flexi_logger::Naming::Timestamps,
-            flexi_logger::Cleanup::KeepLogFiles(120),
+            flexi_logger::Cleanup::KeepLogFiles(
+                (cfg.log_retention_hours * 60) as usize, // 1-min rotation × N hours
+            ),
         )
         .duplicate_to_stderr(flexi_logger::Duplicate::All)
         .format_for_files(flexi_logger::detailed_format)
@@ -77,14 +88,17 @@ fn main() -> Result<()> {
     info!("║   Hold hotkey, speak, release.          ║");
     info!("║   Text → auto-type → verify → Enter     ║");
     info!("╚══════════════════════════════════════════╝");
-    info!("📁 Config: {}", cli.config_path.display());
+    info!("📁 Config: {}", cfg_path.display());
     info!(
         "📁 Logs:   {}",
-        std::env::current_dir().unwrap_or_default().join("logs").display()
+        std::env::current_dir().unwrap_or_default().join(&cfg.log_dir).display()
     );
-
-    // ---- load config -------------------------------------------------------
-    let mut cfg = config::Config::load(&cli.config_path);
+    info!(
+        "📊 Log level: {}, retention: {}h ({} files)",
+        cfg.log_level,
+        cfg.log_retention_hours,
+        cfg.log_retention_hours * 60,
+    );
 
     // ---- interactive config review (unless --non-interactive) ---------------
     if !cli.non_interactive {
@@ -299,6 +313,9 @@ fn review_config(cfg: &mut config::Config) {
         "│ model_search_dirs:  {:?}",
         cfg.model_search_dirs,
     );
+    eprintln!("│ log_dir:            {}", cfg.log_dir);
+    eprintln!("│ log_level:          {}", cfg.log_level);
+    eprintln!("│ log_retention:      {}h", cfg.log_retention_hours);
     eprintln!("└─────────────────────────────────────────────────────");
 
     eprint!("\n✏  Edit config? [y/N]: ");
@@ -381,6 +398,52 @@ fn review_config(cfg: &mut config::Config) {
             .map(|s| s.trim().to_string())
             .filter(|s| !s.is_empty())
             .collect();
+    }
+
+    // -- Edit log dir --
+    eprintln!();
+    eprintln!("Log directory:");
+    eprint!("Log dir [{}]: ", cfg.log_dir);
+    input.clear();
+    std::io::stdin().read_line(&mut input).ok();
+    let val = input.trim().to_string();
+    if !val.is_empty() {
+        cfg.log_dir = val;
+    }
+
+    // -- Edit log level --
+    eprintln!();
+    eprintln!("Log level (trace, debug, info, warn, error):");
+    eprint!("Log level [{}]: ", cfg.log_level);
+    input.clear();
+    std::io::stdin().read_line(&mut input).ok();
+    let val = input.trim().to_string();
+    if !val.is_empty() {
+        let lv = val.to_lowercase();
+        if matches!(lv.as_str(), "trace" | "debug" | "info" | "warn" | "error") {
+            cfg.log_level = lv;
+        } else {
+            eprintln!("⚠  Invalid level — keeping current");
+        }
+    }
+
+    // -- Edit log retention --
+    eprintln!();
+    eprintln!("Log retention in hours (rotated files older than this are deleted):");
+    eprint!("Retention hours [{}]: ", cfg.log_retention_hours);
+    input.clear();
+    std::io::stdin().read_line(&mut input).ok();
+    let val = input.trim().to_string();
+    if !val.is_empty() {
+        if let Ok(n) = val.parse::<u64>() {
+            if n > 0 {
+                cfg.log_retention_hours = n;
+            } else {
+                eprintln!("⚠  Must be at least 1");
+            }
+        } else {
+            eprintln!("⚠  Not a number");
+        }
     }
 }
 

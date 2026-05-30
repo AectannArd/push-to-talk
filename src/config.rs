@@ -18,6 +18,18 @@ fn default_hotkey() -> String {
     "Ctrl+Shift+T".into()
 }
 
+fn default_log_dir() -> String {
+    "logs".into()
+}
+
+fn default_log_level() -> String {
+    "error".into()
+}
+
+fn default_retention_hours() -> u64 {
+    2
+}
+
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Config {
     /// Audio device filter: substring or numeric index. None = prompt on startup.
@@ -35,6 +47,18 @@ pub struct Config {
     /// Hotkey in format "Mod+Mod+Key", e.g. "Ctrl+Shift+T".
     #[serde(default = "default_hotkey")]
     pub hotkey: String,
+
+    /// Directory for rolling log files.
+    #[serde(default = "default_log_dir")]
+    pub log_dir: String,
+
+    /// Log level: "trace", "debug", "info", "warn", "error".
+    #[serde(default = "default_log_level")]
+    pub log_level: String,
+
+    /// How many hours to retain rotated log files before cleanup.
+    #[serde(default = "default_retention_hours")]
+    pub log_retention_hours: u64,
 }
 
 impl Default for Config {
@@ -44,6 +68,9 @@ impl Default for Config {
             language: None,
             model_search_dirs: default_model_dirs(),
             hotkey: default_hotkey(),
+            log_dir: default_log_dir(),
+            log_level: default_log_level(),
+            log_retention_hours: default_retention_hours(),
         }
     }
 }
