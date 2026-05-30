@@ -37,6 +37,10 @@ fn default_retention_hours() -> u64 {
     2
 }
 
+fn default_log_format() -> String {
+    "text".into()
+}
+
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Config {
     /// Audio device filter: substring or numeric index. None = prompt on startup.
@@ -70,6 +74,10 @@ pub struct Config {
     /// How many hours to retain rotated log files before cleanup.
     #[serde(default = "default_retention_hours")]
     pub log_retention_hours: u64,
+
+    /// Log output format: "text" or "json".
+    #[serde(default = "default_log_format")]
+    pub log_format: String,
 }
 
 impl Default for Config {
@@ -83,6 +91,7 @@ impl Default for Config {
             log_dir: default_log_dir(),
             log_level: default_log_level(),
             log_retention_hours: default_retention_hours(),
+            log_format: default_log_format(),
         }
     }
 }

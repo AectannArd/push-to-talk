@@ -55,22 +55,33 @@ fn parse_args() -> Cli {
 fn main() -> Result<()> {
     let cli = parse_args();
 
-    // ---- load config (ahead of logger, so we can use its log settings) -----
-    // Note: log macros before logger init are silently discarded.
+    // ---- load config -------------------------------------------------------
     let cfg_path = cli.config_path.clone();
     let mut cfg = config::Config::load(&cfg_path);
 
-    // ---- expand env vars in log path and create directory if missing ---------
+    // ---- validate model -----------------------------------------------------
+    let model_missing = cfg.model.as_ref().map_or(true, |m| !Path::new(m).exists());
+    if model_missing && cli.non_interactive {
+        anyhow::bail!(
+            "Model not configured or file not found.\n\
+             Run without --non-interactive to set up the model."
+        );
+    }
+
+    // ---- interactive config review (before logger — uses eprintln!) ---------
+    if !cli.non_interactive {
+        review_config(&mut cfg, model_missing)?;
+        cfg.save(&cfg_path);
+    }
+
+    // ---- expand env vars in log path, create dir -----------------------------
     let log_dir = expand_env_vars(&cfg.log_dir);
     std::fs::create_dir_all(&log_dir)?;
 
-    // ---- init tracing subscriber (rolling file + console) -------------------
-    let file_appender = tracing_appender::rolling::RollingFileAppender::new(
-        tracing_appender::rolling::Rotation::MINUTELY,
-        &log_dir,
-        "push-to-talk.log",
-    );
-    let (non_blocking, _flush_guard) = tracing_appender::non_blocking(file_appender);
+    // ---- init tracing subscriber (uses final config values) ------------------
+    let log_ext: &'static str = if cfg.log_format == "json" { "json" } else { "log" };
+    let rolling = RollingFileWriter::new(&log_dir, "push-to-talk", log_ext);
+    let (non_blocking, _flush_guard) = tracing_appender::non_blocking(rolling);
 
     let filter = tracing_subscriber::EnvFilter::try_new(&cfg.log_level)
         .unwrap_or_else(|_| {
@@ -83,20 +94,40 @@ fn main() -> Result<()> {
 
     use tracing_subscriber::layer::SubscriberExt;
     use tracing_subscriber::util::SubscriberInitExt;
-    tracing_subscriber::registry()
-        .with(filter)
-        .with(
-            tracing_subscriber::fmt::layer()
-                .with_writer(std::io::stderr)
-                .with_target(false),
-        )
-        .with(
-            tracing_subscriber::fmt::layer()
-                .with_writer(non_blocking)
-                .with_ansi(false)
-                .with_target(false),
-        )
-        .init();
+
+    if cfg.log_format == "json" {
+        tracing_subscriber::registry()
+            .with(filter)
+            .with(
+                tracing_subscriber::fmt::layer()
+                    .json()
+                    .with_writer(std::io::stderr)
+                    .with_target(false),
+            )
+            .with(
+                tracing_subscriber::fmt::layer()
+                    .json()
+                    .with_writer(non_blocking)
+                    .with_ansi(false)
+                    .with_target(false),
+            )
+            .init();
+    } else {
+        tracing_subscriber::registry()
+            .with(filter)
+            .with(
+                tracing_subscriber::fmt::layer()
+                    .with_writer(std::io::stderr)
+                    .with_target(false),
+            )
+            .with(
+                tracing_subscriber::fmt::layer()
+                    .with_writer(non_blocking)
+                    .with_ansi(false)
+                    .with_target(false),
+            )
+            .init();
+    }
 
     // Bridge log -> tracing so whisper-rs log_backend output is captured
     tracing_log::LogTracer::init().ok();
@@ -108,10 +139,11 @@ fn main() -> Result<()> {
     let cleanup_dir = log_dir.clone();
     let cleanup_hours = cfg.log_retention_hours;
     std::thread::spawn(move || loop {
-        std::thread::sleep(std::time::Duration::from_secs(600)); // every 10 min
+        std::thread::sleep(std::time::Duration::from_secs(600));
         cleanup_old_logs(&cleanup_dir, cleanup_hours);
     });
 
+    // ---- banner (after logger so it appears in both console and file) --------
     info!("╔══════════════════════════════════════════╗");
     info!("║   🎙  Push-to-Talk CLI                   ║");
     info!("║   Hold hotkey, speak, release.          ║");
@@ -120,25 +152,11 @@ fn main() -> Result<()> {
     info!("📁 Config: {}", cfg_path.display());
     info!("📁 Logs:   {}", log_dir);
     info!(
-        "📊 Log level: {}, retention: {}h",
+        "📊 Log level: {}, format: {}, retention: {}h",
         cfg.log_level,
+        cfg.log_format,
         cfg.log_retention_hours,
     );
-
-    // ---- validate model -----------------------------------------------------
-    let model_missing = cfg.model.as_ref().map_or(true, |m| !Path::new(m).exists());
-    if model_missing && cli.non_interactive {
-        anyhow::bail!(
-            "Model not configured or file not found.\n\
-             Run without --non-interactive to set up the model."
-        );
-    }
-
-    // ---- interactive config review ------------------------------------------
-    if !cli.non_interactive {
-        review_config(&mut cfg, model_missing)?;
-        cfg.save(&cli.config_path);
-    }
 
     // ---- parse hotkey from config -------------------------------------------
     let parsed_hotkey = hotkey::parse_hotkey(&cfg.hotkey).map_err(|e| {
@@ -162,7 +180,7 @@ fn main() -> Result<()> {
     // If model was auto-detected (not from config), save it
     if cfg.model.is_none() {
         cfg.model = Some(model_path.to_string_lossy().to_string());
-        cfg.save(&cli.config_path);
+        cfg.save(&cfg_path);
     }
     let transcriber = Transcriber::new(&model_path, cfg.language.clone())?;
 
@@ -170,7 +188,7 @@ fn main() -> Result<()> {
     let (recorder, device_filter) = Recorder::new(cfg.device.as_deref())?;
     if let Some(filter) = device_filter {
         cfg.device = Some(filter);
-        cfg.save(&cli.config_path);
+        cfg.save(&cfg_path);
     }
 
     // ---- shared state (callback ← → transcription thread) --------------------
@@ -360,6 +378,7 @@ fn review_config(cfg: &mut config::Config, force: bool) -> Result<()> {
     );
     eprintln!("│ log_dir:            {}", cfg.log_dir);
     eprintln!("│ log_level:          {}", cfg.log_level);
+    eprintln!("│ log_format:         {}", cfg.log_format);
     eprintln!("│ log_retention:      {}h", cfg.log_retention_hours);
     eprintln!("└─────────────────────────────────────────────────────");
 
@@ -538,6 +557,21 @@ fn edit_remaining_settings(cfg: &mut config::Config) {
             cfg.log_level = lv;
         } else {
             eprintln!("⚠  Invalid level — keeping current");
+        }
+    }
+
+    // -- Edit log format --
+    eprintln!();
+    eprintln!("Log format (text or json):");
+    eprint!("Format [{}]: ", cfg.log_format);
+    input.clear();
+    std::io::stdin().read_line(&mut input).ok();
+    let val = input.trim().to_lowercase();
+    if !val.is_empty() {
+        if matches!(val.as_str(), "text" | "json") {
+            cfg.log_format = val;
+        } else {
+            eprintln!("⚠  Invalid format — use 'text' or 'json'");
         }
     }
 
@@ -726,7 +760,10 @@ fn cleanup_old_logs(dir: &str, max_age_hours: u64) {
     if let Ok(entries) = std::fs::read_dir(dir) {
         for entry in entries.filter_map(|e| e.ok()) {
             let path = entry.path();
-            if path.extension().map_or(true, |e| e != "log") {
+            if path
+                .extension()
+                .map_or(true, |e| e != "log" && e != "json")
+            {
                 continue;
             }
             if let Ok(meta) = entry.metadata() {
@@ -736,6 +773,73 @@ fn cleanup_old_logs(dir: &str, max_age_hours: u64) {
                     }
                 }
             }
+        }
+    }
+}
+
+// ---- custom rolling file writer ------------------------------------------
+
+use std::io::{self, Write};
+
+struct RollingFileWriter {
+    dir: PathBuf,
+    prefix: String,
+    ext: String,
+    current_key: String,
+    file: Option<std::fs::File>,
+}
+
+impl RollingFileWriter {
+    fn new(dir: &str, prefix: &str, ext: &str) -> Self {
+        std::fs::create_dir_all(dir).ok();
+        Self {
+            dir: PathBuf::from(dir),
+            prefix: prefix.to_string(),
+            ext: ext.to_string(),
+            current_key: String::new(),
+            file: None,
+        }
+    }
+
+    /// Returns the rotation key for the current minute.
+    fn rotation_key() -> String {
+        let now = chrono::Local::now();
+        now.format("%Y-%m-%d-%H-%M").to_string()
+    }
+
+    fn rotate(&mut self) -> io::Result<()> {
+        let key = Self::rotation_key();
+        if key == self.current_key {
+            return Ok(());
+        }
+        self.current_key = key;
+        let filename = format!("{}.{}.{}", self.prefix, self.current_key, self.ext);
+        let path = self.dir.join(filename);
+        self.file = Some(
+            std::fs::OpenOptions::new()
+                .create(true)
+                .append(true)
+                .open(&path)?,
+        );
+        Ok(())
+    }
+}
+
+impl Write for RollingFileWriter {
+    fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
+        self.rotate()?;
+        if let Some(f) = self.file.as_mut() {
+            f.write(buf)
+        } else {
+            Ok(0)
+        }
+    }
+
+    fn flush(&mut self) -> io::Result<()> {
+        if let Some(f) = self.file.as_mut() {
+            f.flush()
+        } else {
+            Ok(())
         }
     }
 }
