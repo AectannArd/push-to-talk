@@ -9,10 +9,11 @@ anyhow = "1"
 arboard = "3"
 cpal = "0.15"
 hound = "3"
-whisper-rs = { version = "0.15", features = ["cuda", "log_backend"] }
+# Base whisper-rs: log_backend is universal. GPU features selected per-platform below.
+whisper-rs = { version = "0.15", features = ["log_backend"] }
 rdev = "0.5"
 enigo = "0.2"
-log = "0.4"                       # whisper-rs log_backend writes here
+log = "0.4"
 tracing = "0.1"
 tracing-log = "0.2"
 tracing-subscriber = { version = "0.3", features = ["env-filter", "fmt", "json"] }
@@ -21,7 +22,9 @@ serde = { version = "1", features = ["derive"] }
 toml = "0.8"
 chrono = "0.4"
 
+# Windows: CUDA GPU, tray icon (Shell_NotifyIcon)
 [target.'cfg(windows)'.dependencies]
+whisper-rs = { version = "0.15", features = ["cuda", "log_backend"] }
 windows = { version = "0.56", features = [
     "Win32_Foundation",
     "Win32_Graphics_Gdi",
@@ -29,3 +32,7 @@ windows = { version = "0.56", features = [
     "Win32_UI_WindowsAndMessaging",
     "Win32_UI_Shell",
 ] }
+
+# macOS: Metal + CoreML GPU, no tray dependency needed
+[target.'cfg(target_os = "macos")'.dependencies]
+whisper-rs = { version = "0.15", features = ["metal", "coreml", "log_backend"] }

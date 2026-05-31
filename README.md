@@ -7,17 +7,38 @@ typed directly into the active window.
 
 ## Quick start
 
+### Windows
+
 ```powershell
-# 1. Download a Whisper model to ~/.push-to-talk/models/
+# 1. Download a Whisper model
 mkdir -p ~/.push-to-talk/models
-curl -Lo ~/.push-to-talk/models/ggml-base.bin \
+curl -Lo ~/.push-to-talk/models/ggml-base.bin `
   https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-base.bin
 
 # 2. Build (requires CUDA Toolkit + CUDA_PATH)
 cargo build --release
 
-# 3. Run — interactive setup on first launch
+# 3. Run
 .\target\release\push-to-talk.exe
+```
+
+### macOS (Apple Silicon / M-series)
+
+```bash
+# 1. Download a Whisper model
+mkdir -p ~/.push-to-talk/models
+curl -Lo ~/.push-to-talk/models/ggml-base.bin \
+  https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-base.bin
+
+# 2. Build (Metal + CoreML acceleration, no extra toolchain needed)
+cargo build --release
+
+# 3. Grant Accessibility permission (required for global hotkey)
+#    System Preferences → Privacy & Security → Accessibility
+#    Add the push-to-talk binary
+
+# 4. Run
+./target/release/push-to-talk
 ```
 
 ## CLI flags
@@ -112,12 +133,16 @@ On first run, the discovered model path is saved to config automatically.
 
 ## Requirements
 
-- **Rust** 1.85+
-- **CMake** + MSVC C++ compiler (whisper.cpp build)
-- **CUDA Toolkit** + `CUDA_PATH` env var (GPU acceleration)
-- **Microphone**
+| Component | Windows | macOS |
+|-----------|---------|-------|
+| Rust | 1.85+ | 1.85+ |
+| C/C++ compiler | MSVC + CMake | Xcode CLT + CMake |
+| GPU | CUDA Toolkit 12+ | Metal (built-in) |
+| Global hotkey | Admin rights | Accessibility permission |
+| Microphone | ✓ | ✓ |
 
-To build without CUDA, remove the `cuda` feature from `whisper-rs` in `Cargo.toml`.
+To build without GPU acceleration, remove the platform GPU features from
+`whisper-rs` in `Cargo.toml` (`cuda` on Windows, `metal`/`coreml` on macOS).
 
 ## Project structure
 
