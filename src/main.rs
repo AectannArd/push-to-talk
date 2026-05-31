@@ -167,12 +167,17 @@ fn main() -> Result<()> {
     let parsed_hotkey = hotkey::parse_hotkey(&cfg.hotkey).map_err(|e| {
         anyhow::anyhow!("Invalid hotkey '{}': {e}", cfg.hotkey)
     })?;
+    let win_label = if parsed_hotkey.needs_win {
+        mod_win_label()
+    } else {
+        ""
+    };
     info!(
         "⌨  Hotkey: {}{}{}{}{}",
         if parsed_hotkey.needs_ctrl { "Ctrl+" } else { "" },
         if parsed_hotkey.needs_shift { "Shift+" } else { "" },
         if parsed_hotkey.needs_alt { "Alt+" } else { "" },
-        if parsed_hotkey.needs_win { "Win+" } else { "" },
+        win_label,
         cfg.hotkey.split('+').last().unwrap_or("?"),
     );
 
@@ -550,8 +555,21 @@ fn edit_remaining_settings(cfg: &mut config::Config) {
     // -- Edit hotkey --
     eprintln!();
     eprintln!("Hotkey (format: Mod+Mod+Key, e.g. Ctrl+Shift+T):");
-    eprintln!("Modifiers: Ctrl, Shift, Alt, Win");
-    eprint!("Hotkey [{}]: ", cfg.hotkey);
+    eprintln!(
+        "Modifiers: Ctrl, Shift, Alt, {win}",
+        win = mod_win_label().trim_end_matches('+'),
+    );
+    eprintln!();
+    eprintln!("┌─ Supported keys ──────────────────────────────────────");
+    for (name, aliases) in hotkey::supported_keys() {
+        if aliases.len() == 1 {
+            eprintln!("│ {name}");
+        } else {
+            eprintln!("│ {name}  ({})", aliases[1..].join(", "));
+        }
+    }
+    eprintln!("└──────────────────────────────────────────────────────");
+    eprint!("\nHotkey [{}]: ", cfg.hotkey);
     input.clear();
     std::io::stdin().read_line(&mut input).ok();
     let val = input.trim().to_string();
@@ -875,6 +893,15 @@ impl Write for RollingFileWriter {
 
 /// Expand environment variables in a path string.
 /// Supports `%VAR%` (Windows) and `$VAR` / `${VAR}` (Unix).
+/// Platform-appropriate label for the Win/Cmd modifier key.
+const fn mod_win_label() -> &'static str {
+    if cfg!(target_os = "macos") {
+        "Cmd+"
+    } else {
+        "Win+"
+    }
+}
+
 fn expand_env_vars(raw: &str) -> String {
     let mut result = String::with_capacity(raw.len());
     let chars: Vec<char> = raw.chars().collect();

@@ -28,7 +28,9 @@ pub fn parse_hotkey(raw: &str) -> Result<ParsedHotkey, String> {
             "ctrl" | "control" => needs_ctrl = true,
             "shift" => needs_shift = true,
             "alt" => needs_alt = true,
-            "win" | "windows" | "meta" | "super" => needs_win = true,
+            "win" | "windows" | "meta" | "super" | "cmd" | "command" => {
+                needs_win = true
+            }
             other => return Err(format!("unknown modifier: {other}")),
         }
     }
@@ -136,4 +138,34 @@ fn parse_key(name: &str) -> Result<rdev::Key, String> {
 
         _ => Err(format!("unknown key: {name}")),
     }
+}
+
+/// All key names recognised by the hotkey parser.
+/// Returns an array of `(name, aliases)` tuples.
+pub fn supported_keys() -> &'static [(&'static str, &'static [&'static str])] {
+    &[
+        // Letters
+        ("A-Z", &["a", "b", "c", "d", "e", "f", "g", "h", "i", "j", "k", "l", "m",
+                  "n", "o", "p", "q", "r", "s", "t", "u", "v", "w", "x", "y", "z"]),
+        // Digits
+        ("0-9", &["0", "1", "2", "3", "4", "5", "6", "7", "8", "9"]),
+        // Function keys
+        ("F1-F12", &["F1", "F2", "F3", "F4", "F5", "F6", "F7", "F8", "F9", "F10", "F11", "F12"]),
+        // Special
+        ("Space", &["Space"]),
+        ("Return", &["Return", "Enter"]),
+        ("Escape", &["Escape", "Esc"]),
+        ("Tab", &["Tab"]),
+        ("Backspace", &["Backspace", "Back"]),
+        ("Delete", &["Delete", "Del"]),
+        ("Insert", &["Insert", "Ins"]),
+        ("Home", &["Home"]),
+        ("End", &["End"]),
+        ("PageUp", &["PageUp", "PgUp"]),
+        ("PageDown", &["PageDown", "PgDn"]),
+        ("↑ ↓ ← →", &["Up", "Down", "Left", "Right"]),
+        ("CapsLock", &["CapsLock", "Caps"]),
+        ("PrintScreen", &["PrintScreen", "PrtSc"]),
+        ("Pause", &["Pause", "Break"]),
+    ]
 }
