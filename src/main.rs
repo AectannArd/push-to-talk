@@ -6,6 +6,7 @@ mod transcriber;
 mod tray;
 
 use anyhow::Result;
+use clap::Parser;
 use recorder::Recorder;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -15,53 +16,34 @@ use transcriber::Transcriber;
 
 // ---- CLI -----------------------------------------------------------------
 
+/// Push-to-talk voice input for CLI using Whisper.
+///
+/// Hold the configured hotkey, speak, and release to transcribe audio to text.
+/// The transcribed text is automatically typed into the active window.
+#[derive(Parser, Debug)]
+#[command(name = "push-to-talk")]
+#[command(author, version, about, long_about = None)]
 struct Cli {
-    config_path: PathBuf,
+    /// Path to the config file
+    #[arg(long, value_name = "PATH", default_value_os_t = config::default_path())]
+    config: PathBuf,
+
+    /// Run in non-interactive mode (no prompts, fail on missing config)
+    #[arg(long)]
     non_interactive: bool,
+
+    /// Save voice recordings to the voice-records directory for debugging
+    #[arg(long)]
     debug_voice_record: bool,
-}
-
-fn parse_args() -> Cli {
-    let args: Vec<String> = std::env::args().collect();
-    let mut config_path: Option<PathBuf> = None;
-    let mut non_interactive = false;
-    let mut debug_voice_record = false;
-    let mut i = 1;
-
-    while i < args.len() {
-        match args[i].as_str() {
-            "--config" => {
-                i += 1;
-                if i < args.len() {
-                    config_path = Some(PathBuf::from(&args[i]));
-                } else {
-                    eprintln!("⚠  --config requires a path argument");
-                }
-            }
-            "--non-interactive" => non_interactive = true,
-            "--debug-voice-record" => debug_voice_record = true,
-            other if other.starts_with("--config=") => {
-                config_path = Some(PathBuf::from(&other[9..]));
-            }
-            _ => {}
-        }
-        i += 1;
-    }
-
-    Cli {
-        config_path: config_path.unwrap_or_else(config::default_path),
-        non_interactive,
-        debug_voice_record,
-    }
 }
 
 // ---- main ----------------------------------------------------------------
 
 fn main() -> Result<()> {
-    let cli = parse_args();
+    let cli = Cli::parse();
 
     // ---- load config -------------------------------------------------------
-    let cfg_path = cli.config_path.clone();
+    let cfg_path = cli.config.clone();
     let mut cfg = config::Config::load(&cfg_path);
 
     // ---- validate model -----------------------------------------------------
