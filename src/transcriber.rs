@@ -28,11 +28,11 @@ impl Transcriber {
 
         let params = whisper_rs::WhisperContextParameters::default();
 
-        let ctx = whisper_rs::WhisperContext::new_with_params(
-            &model_path.to_string_lossy(),
-            params,
-        )
-        .context("Failed to load Whisper model — the file may be corrupted or unsupported.")?;
+        let ctx =
+            whisper_rs::WhisperContext::new_with_params(&model_path.to_string_lossy(), params)
+                .context(
+                    "Failed to load Whisper model — the file may be corrupted or unsupported.",
+                )?;
 
         tracing::info!("✅ Whisper model loaded: {}", model_path.display());
         Ok(Self { ctx, language })
@@ -61,14 +61,16 @@ impl Transcriber {
             .context("Failed to convert i16 → f32 audio")?;
 
         let f32_min = inter_samples.iter().cloned().fold(f32::INFINITY, f32::min);
-        let f32_max = inter_samples.iter().cloned().fold(f32::NEG_INFINITY, f32::max);
+        let f32_max = inter_samples
+            .iter()
+            .cloned()
+            .fold(f32::NEG_INFINITY, f32::max);
         tracing::info!("🔍 f32 range: [{f32_min:.6}, {f32_max:.6}]");
 
         let mut state = self.ctx.create_state()?;
 
-        let mut params = whisper_rs::FullParams::new(whisper_rs::SamplingStrategy::Greedy {
-            best_of: 1,
-        });
+        let mut params =
+            whisper_rs::FullParams::new(whisper_rs::SamplingStrategy::Greedy { best_of: 1 });
         params.set_n_threads(
             std::thread::available_parallelism()
                 .map(|n| n.get() as i32)
@@ -109,10 +111,7 @@ impl Transcriber {
             }
         }
 
-        let text: String = state
-            .as_iter()
-            .map(|seg| seg.to_string())
-            .collect();
+        let text: String = state.as_iter().map(|seg| seg.to_string()).collect();
 
         let trimmed = text.trim().to_string();
         if trimmed.is_empty() {

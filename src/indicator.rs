@@ -1,8 +1,8 @@
 //! Console recording indicator: terminal title + visible marker.
 //! Used alongside the tray icon for foreground sessions.
 
-use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 
 pub struct IndicatorHandle {
     visible: Arc<AtomicBool>,

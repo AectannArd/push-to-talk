@@ -17,7 +17,10 @@ fn default_model_dirs() -> Vec<String> {
         .map(PathBuf::from)
         .unwrap_or_else(|_| PathBuf::from("."));
     vec![
-        home.join(".push-to-talk").join("models").to_string_lossy().to_string(),
+        home.join(".push-to-talk")
+            .join("models")
+            .to_string_lossy()
+            .to_string(),
     ]
 }
 
@@ -100,7 +103,10 @@ impl Config {
     /// Load config from `path`. Returns defaults if file doesn't exist or can't be parsed.
     pub fn load(path: &Path) -> Self {
         if !path.exists() {
-            tracing::info!("📄 No config at {path}, using defaults", path = path.display());
+            tracing::info!(
+                "📄 No config at {path}, using defaults",
+                path = path.display()
+            );
             return Self::default();
         }
         match std::fs::read_to_string(path) {

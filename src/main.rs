@@ -10,7 +10,7 @@ use clap::Parser;
 use recorder::Recorder;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::{mpsc, Arc, Mutex};
+use std::sync::{Arc, Mutex, mpsc};
 use tracing::{error, info, warn};
 use transcriber::Transcriber;
 
@@ -66,18 +66,21 @@ fn main() -> Result<()> {
     std::fs::create_dir_all(&log_dir)?;
 
     // ---- init tracing subscriber (uses final config values) ------------------
-    let log_ext: &'static str = if cfg.log_format == "json" { "json" } else { "log" };
+    let log_ext: &'static str = if cfg.log_format == "json" {
+        "json"
+    } else {
+        "log"
+    };
     let rolling = RollingFileWriter::new(&log_dir, "push-to-talk", log_ext);
     let (non_blocking, _flush_guard) = tracing_appender::non_blocking(rolling);
 
-    let filter = tracing_subscriber::EnvFilter::try_new(&cfg.log_level)
-        .unwrap_or_else(|_| {
-            eprintln!(
-                "⚠  Invalid log_level '{}', falling back to 'error'",
-                cfg.log_level
-            );
-            tracing_subscriber::EnvFilter::new("error")
-        });
+    let filter = tracing_subscriber::EnvFilter::try_new(&cfg.log_level).unwrap_or_else(|_| {
+        eprintln!(
+            "⚠  Invalid log_level '{}', falling back to 'error'",
+            cfg.log_level
+        );
+        tracing_subscriber::EnvFilter::new("error")
+    });
 
     use tracing_subscriber::layer::SubscriberExt;
     use tracing_subscriber::util::SubscriberInitExt;
@@ -125,9 +128,11 @@ fn main() -> Result<()> {
     // Spawn periodic cleanup
     let cleanup_dir = log_dir.clone();
     let cleanup_hours = cfg.log_retention_hours;
-    std::thread::spawn(move || loop {
-        std::thread::sleep(std::time::Duration::from_secs(600));
-        cleanup_old_logs(&cleanup_dir, cleanup_hours);
+    std::thread::spawn(move || {
+        loop {
+            std::thread::sleep(std::time::Duration::from_secs(600));
+            cleanup_old_logs(&cleanup_dir, cleanup_hours);
+        }
     });
 
     // ---- banner (after logger so it appears in both console and file) --------
@@ -140,15 +145,12 @@ fn main() -> Result<()> {
     info!("📁 Logs:   {}", log_dir);
     info!(
         "📊 Log level: {}, format: {}, retention: {}h",
-        cfg.log_level,
-        cfg.log_format,
-        cfg.log_retention_hours,
+        cfg.log_level, cfg.log_format, cfg.log_retention_hours,
     );
 
     // ---- parse hotkey from config -------------------------------------------
-    let parsed_hotkey = hotkey::parse_hotkey(&cfg.hotkey).map_err(|e| {
-        anyhow::anyhow!("Invalid hotkey '{}': {e}", cfg.hotkey)
-    })?;
+    let parsed_hotkey = hotkey::parse_hotkey(&cfg.hotkey)
+        .map_err(|e| anyhow::anyhow!("Invalid hotkey '{}': {e}", cfg.hotkey))?;
     let win_label = if parsed_hotkey.needs_win {
         mod_win_label()
     } else {
@@ -156,8 +158,16 @@ fn main() -> Result<()> {
     };
     info!(
         "⌨  Hotkey: {}{}{}{}{}",
-        if parsed_hotkey.needs_ctrl { "Ctrl+" } else { "" },
-        if parsed_hotkey.needs_shift { "Shift+" } else { "" },
+        if parsed_hotkey.needs_ctrl {
+            "Ctrl+"
+        } else {
+            ""
+        },
+        if parsed_hotkey.needs_shift {
+            "Shift+"
+        } else {
+            ""
+        },
         if parsed_hotkey.needs_alt { "Alt+" } else { "" },
         win_label,
         cfg.hotkey.split('+').last().unwrap_or("?"),
@@ -189,8 +199,7 @@ fn main() -> Result<()> {
     let alt_held = Arc::new(AtomicBool::new(false));
     let win_held = Arc::new(AtomicBool::new(false));
     let is_recording = Arc::new(AtomicBool::new(false));
-    let recording: Arc<Mutex<Option<recorder::Recording>>> =
-        Arc::new(Mutex::new(None));
+    let recording: Arc<Mutex<Option<recorder::Recording>>> = Arc::new(Mutex::new(None));
 
     let (tx, rx) = mpsc::channel::<Vec<i16>>();
 
@@ -217,10 +226,7 @@ fn main() -> Result<()> {
     std::thread::spawn(move || {
         for audio in rx {
             let peak = audio.iter().map(|&s| s.abs()).max().unwrap_or(0);
-            let rms = (audio
-                .iter()
-                .map(|&s| s as f64 * s as f64)
-                .sum::<f64>()
+            let rms = (audio.iter().map(|&s| s as f64 * s as f64).sum::<f64>()
                 / audio.len() as f64)
                 .sqrt();
             info!(
@@ -321,7 +327,7 @@ fn main() -> Result<()> {
                             error!("❌ Failed to start recording: {e}");
                             cb_is_rec.store(false, Ordering::SeqCst);
                             tray.set_recording(false);
-                    ind.set_visible(false);
+                            ind.set_visible(false);
                         }
                     }
                 }
@@ -406,10 +412,7 @@ fn review_config(cfg: &mut config::Config, force: bool) -> Result<()> {
         cfg.model.as_deref().unwrap_or("<not set>")
     );
     eprintln!("│ hotkey:             {}", cfg.hotkey);
-    eprintln!(
-        "│ model_search_dirs:  {:?}",
-        cfg.model_search_dirs,
-    );
+    eprintln!("│ model_search_dirs:  {:?}", cfg.model_search_dirs,);
     eprintln!("│ log_dir:            {}", cfg.log_dir);
     eprintln!("│ log_level:          {}", cfg.log_level);
     eprintln!("│ log_format:         {}", cfg.log_format);
@@ -451,7 +454,10 @@ fn review_config(cfg: &mut config::Config, force: bool) -> Result<()> {
     eprintln!("─── Model selection ──────────────────────────────────");
     let models = scan_all_models(&cfg.model_search_dirs);
     if models.is_empty() {
-        eprintln!("⚠  No ggml-*.bin models found in: {dirs:?}", dirs = cfg.model_search_dirs);
+        eprintln!(
+            "⚠  No ggml-*.bin models found in: {dirs:?}",
+            dirs = cfg.model_search_dirs
+        );
     } else {
         eprintln!("┌─ Available models ───────────────────────────────────");
         for (i, m) in models.iter().enumerate() {
@@ -737,9 +743,12 @@ fn modifier_match(needed: bool, actual: bool) -> bool {
 
 /// Download a Whisper model from HuggingFace.
 /// Returns Ok(Some(path)) if downloaded, Ok(None) if skipped, Err if failed.
-fn download_model_from_huggingface(search_dirs: &[String], has_configured_model: bool) -> Result<Option<PathBuf>> {
+fn download_model_from_huggingface(
+    search_dirs: &[String],
+    has_configured_model: bool,
+) -> Result<Option<PathBuf>> {
     use indicatif::{ProgressBar, ProgressStyle};
-    use std::io::{Write, Read};
+    use std::io::{Read, Write};
 
     // Define available models
     let models: Vec<(&str, &str, &str)> = vec![
@@ -826,9 +835,7 @@ fn download_model_from_huggingface(search_dirs: &[String], has_configured_model:
         return Ok(Some(target_path));
     }
 
-    let url = format!(
-        "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/{model_name}"
-    );
+    let url = format!("https://huggingface.co/ggerganov/whisper.cpp/resolve/main/{model_name}");
 
     eprintln!();
     eprintln!("Downloading {model_name} from HuggingFace...");
@@ -994,10 +1001,7 @@ fn cleanup_old_logs(dir: &str, max_age_hours: u64) {
     if let Ok(entries) = std::fs::read_dir(dir) {
         for entry in entries.filter_map(|e| e.ok()) {
             let path = entry.path();
-            if path
-                .extension()
-                .map_or(true, |e| e != "log" && e != "json")
-            {
+            if path.extension().map_or(true, |e| e != "log" && e != "json") {
                 continue;
             }
             if let Ok(meta) = entry.metadata() {
@@ -1099,9 +1103,7 @@ fn expand_env_vars(raw: &str) -> String {
             // Windows-style %VAR%
             if let Some(end) = chars[i + 1..].iter().position(|&c| c == '%') {
                 let var: String = chars[i + 1..i + 1 + end].iter().collect();
-                let value = std::env::var(&var).unwrap_or_else(|_| {
-                    format!("%{var}%")
-                });
+                let value = std::env::var(&var).unwrap_or_else(|_| format!("%{var}%"));
                 result.push_str(&value);
                 i += end + 2;
                 continue;
@@ -1113,9 +1115,7 @@ fn expand_env_vars(raw: &str) -> String {
             if chars[start] == '{' {
                 if let Some(end) = chars[start + 1..].iter().position(|&c| c == '}') {
                     let var: String = chars[start + 1..start + 1 + end].iter().collect();
-                    let value = std::env::var(&var).unwrap_or_else(|_| {
-                        format!("${{{var}}}")
-                    });
+                    let value = std::env::var(&var).unwrap_or_else(|_| format!("${{{var}}}"));
                     result.push_str(&value);
                     i += end + 3;
                     continue;
@@ -1127,8 +1127,7 @@ fn expand_env_vars(raw: &str) -> String {
                     .unwrap_or(chars.len() - start);
                 let var: String = chars[start..start + end].iter().collect();
                 if !var.is_empty() {
-                    let value =
-                        std::env::var(&var).unwrap_or_else(|_| format!("${var}"));
+                    let value = std::env::var(&var).unwrap_or_else(|_| format!("${var}"));
                     result.push_str(&value);
                     i += end + 1;
                     continue;

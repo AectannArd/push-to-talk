@@ -24,7 +24,8 @@ impl Recording {
 
         // Clone the samples instead of trying to take ownership of the Arc
         // The audio callback may still hold a reference to the Arc
-        let samples = self.buffer
+        let samples = self
+            .buffer
             .lock()
             .expect("🛑 Recording::stop: Mutex poisoned")
             .clone();
@@ -102,9 +103,9 @@ impl Recorder {
             eprintln!("┌─ Available input devices ────────────────────────────");
             for (i, d) in devices.iter().enumerate() {
                 let name = d.name().unwrap_or_else(|_| "<unknown>".into());
-                let cfg = d.default_input_config().map(|c| {
-                    format!("{} ch, {} Hz", c.channels(), c.sample_rate().0)
-                });
+                let cfg = d
+                    .default_input_config()
+                    .map(|c| format!("{} ch, {} Hz", c.channels(), c.sample_rate().0));
                 let marker = if i == 0 { " (default)" } else { "" };
                 eprintln!(
                     "│ [{n}] {name} — {cfg}{marker}",

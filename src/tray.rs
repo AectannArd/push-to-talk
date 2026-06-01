@@ -1,7 +1,7 @@
 //! System tray icon: shows idle/recording state via tooltip.
 
-use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::thread;
 
 pub struct TrayHandle {
@@ -37,22 +37,21 @@ pub fn spawn() -> TrayHandle {
 
 #[cfg(windows)]
 mod win {
-    use std::sync::atomic::{AtomicBool, Ordering};
     use std::sync::Arc;
+    use std::sync::atomic::{AtomicBool, Ordering};
 
-    use windows::core::w;
     use windows::Win32::Foundation::{HINSTANCE, HWND, LPARAM, LRESULT, WPARAM};
     use windows::Win32::System::LibraryLoader::GetModuleHandleW;
     use windows::Win32::UI::Shell::{
-        Shell_NotifyIconW, NIF_ICON, NIF_MESSAGE, NIF_TIP, NIM_ADD, NIM_DELETE,
-        NIM_MODIFY, NOTIFYICONDATAW,
+        NIF_ICON, NIF_MESSAGE, NIF_TIP, NIM_ADD, NIM_DELETE, NIM_MODIFY, NOTIFYICONDATAW,
+        Shell_NotifyIconW,
     };
     use windows::Win32::UI::WindowsAndMessaging::{
-        CreateWindowExW, DefWindowProcW, DispatchMessageW, LoadIconW,
-        PeekMessageW, PostQuitMessage, RegisterClassW, TranslateMessage,
-        MSG, PM_REMOVE, WM_APP, WM_DESTROY, WNDCLASSW, WS_OVERLAPPED,
-        IDI_APPLICATION,
+        CreateWindowExW, DefWindowProcW, DispatchMessageW, IDI_APPLICATION, LoadIconW, MSG,
+        PM_REMOVE, PeekMessageW, PostQuitMessage, RegisterClassW, TranslateMessage, WM_APP,
+        WM_DESTROY, WNDCLASSW, WS_OVERLAPPED,
     };
+    use windows::core::w;
 
     const TRAY_MSG: u32 = WM_APP + 1;
 
