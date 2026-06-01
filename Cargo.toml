@@ -22,6 +22,8 @@ tracing-appender = "0.2"
 serde = { version = "1", features = ["derive"] }
 toml = "0.8"
 chrono = "0.4"
+reqwest = { version = "0.11", features = ["blocking", "rustls-tls"], default-features = false }
+indicatif = "0.17"
 
 # Windows: CUDA GPU, tray icon (Shell_NotifyIcon)
 [target.'cfg(windows)'.dependencies]
