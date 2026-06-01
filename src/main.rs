@@ -208,7 +208,8 @@ fn main() -> Result<()> {
     };
 
     // ---- transcription background thread ------------------------------------
-    let tr = Arc::new(transcriber);
+    // Wrap in Mutex for thread-safety: whisper-rs with Metal/CoreML on macOS is not thread-safe
+    let tr = Arc::new(Mutex::new(transcriber));
     let tr_clone = tr.clone();
     let save_wav = cli.debug_voice_record;
     let wav_dir = voice_records_dir.clone();
@@ -253,7 +254,7 @@ fn main() -> Result<()> {
 
             let transcription_span = tracing::info_span!("transcribe");
             let _guard = transcription_span.enter();
-            match tr_clone.transcribe(&audio) {
+            match tr_clone.lock().unwrap().transcribe(&audio) {
                 Ok(text) if text.is_empty() => {
                     warn!("⚠  No speech detected — try again.");
                 }
@@ -329,15 +330,33 @@ fn main() -> Result<()> {
             rdev::EventType::KeyRelease(key) => {
                 update_modifier_state(&key, false, &cb_ctrl, &cb_shift, &cb_alt, &cb_win);
                 if key == trigger_key && cb_is_rec.load(Ordering::SeqCst) {
+                    // Log immediately to catch crash point
+                    info!("🛑 Key released, stopping recording...");
+
                     cb_is_rec.store(false, Ordering::SeqCst);
                     tray.set_recording(false);
                     ind.set_visible(false);
-                    let audio = cb_rec
-                        .lock()
-                        .unwrap()
-                        .take()
-                        .map(|r| r.stop())
-                        .unwrap_or_default();
+
+                    // Safely stop recording and get audio buffer
+                    let audio = {
+                        let mut guard = match cb_rec.lock() {
+                            Ok(g) => g,
+                            Err(e) => {
+                                error!("❌ Mutex poisoned on recording channel: {e}");
+                                return;
+                            }
+                        };
+                        match guard.take() {
+                            Some(r) => {
+                                info!("🛑 Stopping audio stream...");
+                                r.stop()
+                            }
+                            None => {
+                                warn!("⚠  Recording was None — already taken?");
+                                Vec::new()
+                            }
+                        }
+                    };
 
                     if audio.is_empty() {
                         warn!("⚠  No audio captured — recording too short.");
@@ -348,7 +367,10 @@ fn main() -> Result<()> {
                         "🛑 Captured {:.1}s — transcribing…",
                         audio.len() as f64 / 16_000.0
                     );
-                    let _ = tx.send(audio);
+
+                    if let Err(e) = tx.send(audio) {
+                        error!("❌ Failed to send audio to transcription thread: {e}");
+                    }
                 }
             }
 

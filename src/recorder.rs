@@ -12,16 +12,25 @@ pub struct Recording {
 }
 
 impl Recording {
-    /// Stop recording and return the captured mono 16-bit PCM at 16 kHz.
+    /// Stop recording and return the captured mono 16-bit PCM at 16 kHz.
     pub fn stop(self) -> Vec<i16> {
+        tracing::info!("🛑 Recording::stop() called, dropping stream...");
         drop(self.stream); // stops the stream
+        tracing::info!("🛑 Audio stream dropped");
+
         if !self.has_signal.load(Ordering::Relaxed) {
             tracing::warn!("⚠  All audio samples were zero — is the mic muted?");
         }
-        Arc::into_inner(self.buffer)
-            .unwrap()
-            .into_inner()
-            .unwrap()
+
+        // Clone the samples instead of trying to take ownership of the Arc
+        // The audio callback may still hold a reference to the Arc
+        let samples = self.buffer
+            .lock()
+            .expect("🛑 Recording::stop: Mutex poisoned")
+            .clone();
+
+        tracing::info!("🛑 Recording::stop() returning {} samples", samples.len());
+        samples
     }
 }
 
