@@ -4,6 +4,7 @@ use crate::config;
 use crate::hotkey;
 use crate::recorder;
 use anyhow::Result;
+use indicatif::{MultiProgress, ProgressBar, ProgressStyle};
 use std::io::Write;
 use std::path::{Path, PathBuf};
 
@@ -191,49 +192,66 @@ pub fn review_config(cfg: &mut config::Config, force: bool) -> Result<()> {
 
 /// Interactive editing of all non-model settings.
 pub fn edit_remaining_settings(cfg: &mut config::Config) {
-    let mut input = String::new();
+    let mp = MultiProgress::new();
 
     // -- Device: show current, offer to change --
-    eprintln!();
-    eprintln!("Device:");
-    match recorder::list_input_devices() {
-        Ok(devices) => {
-            eprintln!("┌─ Available input devices ────────────────────────────");
-            for d in &devices {
-                let is_current = cfg.device_id.as_ref().map_or(false, |id| id == &d.id);
-                let marker = if is_current { " (current)" } else if d.is_default { " (default)" } else { "" };
-                eprintln!("│ [{n}] {name}", n = d.index + 1, name = d.name);
-                eprintln!("│     ID: {id} | {cfg}{marker}", id = d.id, cfg = d.config);
-            }
-            eprintln!("└──────────────────────────────────────────────────────");
-            // Find current device number for the prompt
-            let current_num = cfg.device_id.as_ref().and_then(|id| {
-                devices.iter().find(|d| &d.id == id).map(|d| d.index + 1)
-            }).unwrap_or(1);
-            eprint!("Device number [{current_num}]: ");
-            std::io::stderr().flush().ok();
-            input.clear();
-            std::io::stdin().read_line(&mut input).ok();
-            let val = input.trim().to_string();
-            if !val.is_empty() {
-                if let Ok(idx) = val.parse::<usize>() {
-                    if idx >= 1 && idx <= devices.len() {
-                        let d = &devices[idx - 1];
-                        cfg.device_id = Some(d.id.clone());
-                        cfg.device_name = Some(d.name.clone());
-                        eprintln!("✓ Device updated");
-                    } else {
-                        eprintln!("⚠  Invalid index – keeping current device");
-                    }
-                } else {
-                    eprintln!("⚠  Invalid input – keeping current device");
-                }
-            }
-        }
+    let devices = match recorder::list_input_devices() {
+        Ok(devs) => devs,
         Err(e) => {
             eprintln!("⚠  Could not list devices: {e}");
             eprintln!("  Keeping current device");
+            return;
         }
+    };
+
+    eprintln!();
+    eprintln!("Device:");
+    eprintln!("┌─ Available input devices ────────────────────────────");
+    for d in &devices {
+        let is_current = cfg.device_id.as_ref().map_or(false, |id| id == &d.id);
+        let marker = if is_current { " (current)" } else if d.is_default { " (default)" } else { "" };
+        eprintln!("│ [{n}] {name}", n = d.index + 1, name = d.name);
+        eprintln!("│     ID: {id} | {cfg}{marker}", id = d.id, cfg = d.config);
+    }
+    eprintln!("└──────────────────────────────────────────────────────");
+
+    // Find current device number for the prompt
+    let current_num = cfg.device_id.as_ref().and_then(|id| {
+        devices.iter().find(|d| &d.id == id).map(|d| d.index + 1)
+    }).unwrap_or(1);
+
+    let pb = mp.add(ProgressBar::new(1));
+    pb.set_style(
+        ProgressStyle::default_bar()
+            .template("🎙  Device number [{current_num}]: {wide_bar:.cyan/blue} {pos}/{len}")
+            .unwrap_or_else(|_| ProgressStyle::default_bar())
+            .progress_chars("=>-"),
+    );
+    pb.set_length(devices.len() as u64);
+    pb.set_position((current_num - 1) as u64);
+
+    eprint!("Enter device number (or press Enter for {current_num}): ");
+    std::io::stderr().flush().ok();
+    let mut input = String::new();
+    std::io::stdin().read_line(&mut input).ok();
+    let val = input.trim().to_string();
+
+    if !val.is_empty() {
+        if let Ok(idx) = val.parse::<usize>() {
+            if idx >= 1 && idx <= devices.len() {
+                let d = &devices[idx - 1];
+                cfg.device_id = Some(d.id.clone());
+                cfg.device_name = Some(d.name.clone());
+                pb.set_position((idx - 1) as u64);
+                pb.finish_with_message("✓ Device updated");
+            } else {
+                pb.finish_with_message("⚠  Invalid index – keeping current device");
+            }
+        } else {
+            pb.finish_with_message("⚠  Invalid input – keeping current device");
+        }
+    } else {
+        pb.finish_with_message(format!("✓ Keeping device {current_num}"));
     }
 
     // -- Edit language --
