@@ -1,0 +1,221 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+env:
+  CARGO_TERM_COLOR: always
+  BINARY_NAME: push-to-talk
+
+jobs:
+  # Build for macOS
+  build-macos:
+    name: Build macOS
+    runs-on: macos-latest
+    
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-action@stable
+        with:
+          toolchain: stable
+
+      - name: Get version from tag
+        id: get_version
+        run: echo "VERSION=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
+
+      - name: Build distribution
+        run: |
+          chmod +x scripts/build-macos.sh
+          VERSION=${{ steps.get_version.outputs.VERSION }} ./scripts/build-macos.sh
+
+      - name: Upload DMG
+        uses: actions/upload-artifact@v4
+        with:
+          name: macos-dmg
+          path: dist/macos/*.dmg
+          retention-days: 7
+
+      - name: Upload app bundle
+        uses: actions/upload-artifact@v4
+        with:
+          name: macos-app
+          path: dist/macos/*.app
+          retention-days: 7
+
+  # Build for Linux
+  build-linux:
+    name: Build Linux
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-action@stable
+        with:
+          toolchain: stable
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libasound2-dev \
+            libudev-dev \
+            libxcb1-dev \
+            libxcb-render0-dev \
+            libxcb-shape0-dev \
+            libxcb-xfixes0-dev \
+            pkg-config
+
+      - name: Get version from tag
+        id: get_version
+        run: echo "VERSION=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
+
+      - name: Build release binary
+        run: cargo build --release
+
+      - name: Create distribution archive
+        run: |
+          mkdir -p dist/linux
+          cp target/release/$BINARY_NAME dist/linux/
+          cp README.md dist/linux/
+          cp -r scripts dist/linux/ 2>/dev/null || true
+          cd dist/linux
+          tar -czvf ../${{ env.BINARY_NAME }}-${{ steps.get_version.outputs.VERSION }}-linux-x86_64.tar.gz .
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: linux-binary
+          path: dist/*.tar.gz
+          retention-days: 7
+
+  # Build for Windows
+  build-windows:
+    name: Build Windows
+    runs-on: windows-latest
+    
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-action@stable
+        with:
+          toolchain: stable
+
+      - name: Get version from tag
+        id: get_version
+        run: echo "VERSION=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
+        shell: bash
+
+      - name: Build release binary
+        run: cargo build --release
+
+      - name: Create distribution archive
+        run: |
+          mkdir -p dist/windows
+          Copy-Item target/release/$env:BINARY_NAME.exe dist/windows/
+          Copy-Item README.md dist/windows/
+          cd dist/windows
+          Compress-Archive -Path ./* -DestinationPath ../${{ env.BINARY_NAME }}-${{ steps.get_version.outputs.VERSION }}-windows-x86_64.zip
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-binary
+          path: dist/*.zip
+          retention-days: 7
+
+  # Create GitHub Release
+  create-release:
+    name: Create GitHub Release
+    needs: [build-macos, build-linux, build-windows]
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Download macOS DMG
+        uses: actions/download-artifact@v4
+        with:
+          name: macos-dmg
+          path: artifacts/macos
+
+      - name: Download Linux binary
+        uses: actions/download-artifact@v4
+        with:
+          name: linux-binary
+          path: artifacts/linux
+
+      - name: Download Windows binary
+        uses: actions/download-artifact@v4
+        with:
+          name: windows-binary
+          path: artifacts/windows
+
+      - name: Get version from tag
+        id: get_version
+        run: echo "VERSION=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
+
+      - name: Generate changelog
+        id: changelog
+        run: |
+          PREVIOUS_TAG=$(git describe --tags --abbrev=0 HEAD^ 2>/dev/null || echo "")
+          if [ -n "$PREVIOUS_TAG" ]; then
+            git log --pretty=format:"- %s (%h)" $PREVIOUS_TAG..HEAD > /tmp/changelog.md
+          else
+            git log --pretty=format:"- %s (%h)" > /tmp/changelog.md
+          fi
+          echo "CHANGELOG<<EOF" >> $GITHUB_OUTPUT
+          cat /tmp/changelog.md >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          name: Release ${{ steps.get_version.outputs.VERSION }}
+          body: |
+            ## Changes
+            
+            ${{ steps.changelog.outputs.CHANGELOG }}
+            
+            ## Installation
+            
+            ### macOS
+            1. Download and open the `.dmg` file
+            2. Drag `push-to-talk.app` to Applications folder
+            3. Grant required permissions (Input Monitoring, Accessibility, Microphone)
+            
+            ### Linux
+            1. Extract the archive: `tar -xzf push-to-talk-*-linux-x86_64.tar.gz`
+            2. Move binary to PATH: `sudo mv push-to-talk /usr/local/bin/`
+            3. Run: `push-to-talk`
+            
+            ### Windows
+            1. Extract the ZIP archive
+            2. Run `push-to-talk.exe`
+            
+            ## Configuration
+            
+            On first run, you'll be prompted to configure:
+            - Whisper model (download or select existing)
+            - Audio input device
+            - Hotkey combination (default: Ctrl+Shift+T)
+            
+            Config file location: `~/.push-to-talk/config.toml`
+          files: |
+            artifacts/macos/*.dmg
+            artifacts/linux/*.tar.gz
+            artifacts/windows/*.zip
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

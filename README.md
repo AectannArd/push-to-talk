@@ -1,5 +1,11 @@
 # push-to-talk 🎙
 
+[![Rust](https://img.shields.io/badge/Rust-1.85+-orange.svg?logo=rust)](https://www.rust-lang.org)
+[![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
+[![Platform](https://img.shields.io/badge/Platform-macOS%20%7C%20Linux%20%7C%20Windows-lightgrey.svg)](#requirements)
+[![Release](https://img.shields.io/github/v/release/AectannArd/push-to-talk?logo=github)](https://github.com/AectannArd/push-to-talk/releases)
+[![CI](https://img.shields.io/github/actions/workflow/status/AectannArd/push-to-talk/release.yml?logo=github&label=build)](https://github.com/AectannArd/push-to-talk/actions)
+
 Push-to-talk voice input for the CLI. Hold a hotkey, speak, release — text is
 typed directly into the active window.
 
@@ -157,6 +163,14 @@ src/
 └── tray.rs           System tray icon with recording state tooltip (Windows)
 ```
 
+## Contributing
+
+Contributions are welcome! See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines on:
+- Development setup
+- Code style and testing
+- Pull request process
+- Reporting issues
+
 ## License
 
-Unlicense — do whatever you want.
+Apache License 2.0 — see [LICENSE](LICENSE) for details.
