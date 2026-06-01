@@ -199,6 +199,7 @@ fn main() -> Result<()> {
     let shift_held = Arc::new(AtomicBool::new(false));
     let alt_held = Arc::new(AtomicBool::new(false));
     let win_held = Arc::new(AtomicBool::new(false));
+    let trigger_held = Arc::new(AtomicBool::new(false));  // track trigger key state
     let is_recording = Arc::new(AtomicBool::new(false));
     let recording: Arc<Mutex<Option<recorder::Recording>>> = Arc::new(Mutex::new(None));
 
@@ -291,6 +292,7 @@ fn main() -> Result<()> {
     let cb_shift = shift_held.clone();
     let cb_alt = alt_held.clone();
     let cb_win = win_held.clone();
+    let cb_trigger = trigger_held.clone();
     let cb_is_rec = is_recording.clone();
     let cb_rec = recording.clone();
     let rec = Arc::new(recorder);
@@ -309,13 +311,16 @@ fn main() -> Result<()> {
                 if update_modifier_state(&key, true, &cb_ctrl, &cb_shift, &cb_alt, &cb_win) {
                     return;
                 }
+                // Only trigger on initial press, not on repeat
                 if key == trigger_key
+                    && !cb_trigger.load(Ordering::SeqCst)  // prevent repeat
                     && modifier_match(need_ctrl, cb_ctrl.load(Ordering::SeqCst))
                     && modifier_match(need_shift, cb_shift.load(Ordering::SeqCst))
                     && modifier_match(need_alt, cb_alt.load(Ordering::SeqCst))
                     && modifier_match(need_win, cb_win.load(Ordering::SeqCst))
                     && !cb_is_rec.load(Ordering::SeqCst)
                 {
+                    cb_trigger.store(true, Ordering::SeqCst);  // mark as held
                     cb_is_rec.store(true, Ordering::SeqCst);
                     tray.set_recording(true);
                     ind.set_visible(true);
@@ -327,6 +332,7 @@ fn main() -> Result<()> {
                         Err(e) => {
                             error!("❌ Failed to start recording: {e}");
                             cb_is_rec.store(false, Ordering::SeqCst);
+                            cb_trigger.store(false, Ordering::SeqCst);
                             tray.set_recording(false);
                             ind.set_visible(false);
                         }
@@ -336,7 +342,8 @@ fn main() -> Result<()> {
 
             rdev::EventType::KeyRelease(key) => {
                 update_modifier_state(&key, false, &cb_ctrl, &cb_shift, &cb_alt, &cb_win);
-                if key == trigger_key && cb_is_rec.load(Ordering::SeqCst) {
+                if key == trigger_key && cb_trigger.load(Ordering::SeqCst) {
+                    cb_trigger.store(false, Ordering::SeqCst);  // mark as released
                     // Log immediately to catch crash point
                     info!("🛑 Key released, stopping recording...");
 
