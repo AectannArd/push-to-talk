@@ -187,9 +187,10 @@ fn main() -> Result<()> {
     let transcriber = Transcriber::new(&model_path, cfg.language.clone())?;
 
     // ---- init recorder ------------------------------------------------------
-    let (recorder, device_filter) = Recorder::new(cfg.device.as_deref())?;
-    if let Some(filter) = device_filter {
-        cfg.device = Some(filter);
+    let (recorder, device_info) = Recorder::new(cfg.device_id.as_deref())?;
+    if let Some((id, name)) = device_info {
+        cfg.device_id = Some(id);
+        cfg.device_name = Some(name);
         cfg.save(&cfg_path);
     }
 
@@ -400,8 +401,12 @@ fn review_config(cfg: &mut config::Config, force: bool) -> Result<()> {
     eprintln!();
     eprintln!("┌─ Current config ───────────────────────────────────");
     eprintln!(
-        "│ device:             {}",
-        cfg.device.as_deref().unwrap_or("<prompt on startup>")
+        "│ device_id:          {}",
+        cfg.device_id.as_deref().unwrap_or("<prompt on startup>")
+    );
+    eprintln!(
+        "│ device_name:        {}",
+        cfg.device_name.as_deref().unwrap_or("<not set>")
     );
     eprintln!(
         "│ language:           {}",
@@ -570,31 +575,46 @@ fn review_config(cfg: &mut config::Config, force: bool) -> Result<()> {
 fn edit_remaining_settings(cfg: &mut config::Config) {
     let mut input = String::new();
 
-    // -- Edit device --
+    // -- Device: show current, offer to change --
     eprintln!();
+    eprintln!("Device:");
     match recorder::list_input_devices() {
         Ok(devices) => {
             eprintln!("┌─ Available input devices ────────────────────────────");
             for d in &devices {
-                let marker = if d.is_default { " (default)" } else { "" };
-                eprintln!(
-                    "│ [{n}] {name} — {cfg}{marker}",
-                    n = d.index + 1,
-                    name = d.name,
-                    cfg = d.config,
-                );
+                let is_current = cfg.device_id.as_ref().map_or(false, |id| id == &d.id);
+                let marker = if is_current { " (current)" } else if d.is_default { " (default)" } else { "" };
+                eprintln!("│ [{n}] {name}", n = d.index + 1, name = d.name);
+                eprintln!("│     ID: {id} | {cfg}{marker}", id = d.id, cfg = d.config);
             }
             eprintln!("└──────────────────────────────────────────────────────");
+            // Find current device number for the prompt
+            let current_num = cfg.device_id.as_ref().and_then(|id| {
+                devices.iter().find(|d| &d.id == id).map(|d| d.index + 1)
+            }).unwrap_or(1);
+            eprint!("Device number [{current_num}]: ");
+            input.clear();
+            std::io::stdin().read_line(&mut input).ok();
+            let val = input.trim().to_string();
+            if !val.is_empty() {
+                if let Ok(idx) = val.parse::<usize>() {
+                    if idx >= 1 && idx <= devices.len() {
+                        let d = &devices[idx - 1];
+                        cfg.device_id = Some(d.id.clone());
+                        cfg.device_name = Some(d.name.clone());
+                        eprintln!("✓ Device updated");
+                    } else {
+                        eprintln!("⚠  Invalid index – keeping current device");
+                    }
+                } else {
+                    eprintln!("⚠  Invalid input – keeping current device");
+                }
+            }
         }
-        Err(e) => eprintln!("⚠  Could not list devices: {e}"),
-    }
-    let cur_dev = cfg.device.as_deref().unwrap_or_default();
-    eprint!("Device [{cur_dev}]: ");
-    input.clear();
-    std::io::stdin().read_line(&mut input).ok();
-    let val = input.trim().to_string();
-    if !val.is_empty() {
-        cfg.device = Some(val);
+        Err(e) => {
+            eprintln!("⚠  Could not list devices: {e}");
+            eprintln!("  Keeping current device");
+        }
     }
 
     // -- Edit language --

@@ -8,7 +8,7 @@ description = "Push-to-talk voice input for CLI using Whisper"
 anyhow = "1"
 arboard = "3"
 clap = { version = "4", features = ["derive"] }
-cpal = "0.15"
+cpal = "0.17"
 hound = "3"
 # Base whisper-rs: log_backend is universal. GPU features selected per-platform below.
 whisper-rs = { version = "0.15", features = ["log_backend"] }

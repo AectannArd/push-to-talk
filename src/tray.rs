@@ -2,7 +2,6 @@
 
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::thread;
 
 pub struct TrayHandle {
     visible: Arc<AtomicBool>,

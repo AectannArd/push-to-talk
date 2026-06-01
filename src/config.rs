@@ -46,9 +46,13 @@ fn default_log_format() -> String {
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Config {
-    /// Audio device filter: substring or numeric index. None = prompt on startup.
+    /// Audio device system ID (e.g., "coreaudio:device_123"). None = prompt at startup.
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub device: Option<String>,
+    pub device_id: Option<String>,
+
+    /// Human-readable device name (for display purposes only, not used for selection).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub device_name: Option<String>,
 
     /// Whisper language: "auto", "ru", "en", etc.
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -86,7 +90,8 @@ pub struct Config {
 impl Default for Config {
     fn default() -> Self {
         Self {
-            device: None,
+            device_id: None,
+            device_name: None,
             language: None,
             model: None,
             model_search_dirs: default_model_dirs(),
