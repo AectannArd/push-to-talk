@@ -24,6 +24,7 @@ toml = "0.8"
 chrono = "0.4"
 reqwest = { version = "0.11", features = ["blocking", "rustls-tls"], default-features = false }
 indicatif = "0.17"
+console = "0.15"
 
 # Windows: CUDA GPU, tray icon (Shell_NotifyIcon)
 [target.'cfg(windows)'.dependencies]

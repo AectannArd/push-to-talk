@@ -4,6 +4,7 @@ use crate::config;
 use crate::hotkey;
 use crate::recorder;
 use anyhow::Result;
+use console::style;
 use indicatif::{MultiProgress, ProgressBar, ProgressStyle};
 use std::io::Write;
 use std::path::{Path, PathBuf};
@@ -13,33 +14,39 @@ pub fn review_config(cfg: &mut config::Config, force: bool) -> Result<()> {
     use std::io::Write;
 
     eprintln!();
-    eprintln!("┌─ Current config ───────────────────────────────────");
+    eprintln!("{}", style("┌─ Current config ───────────────────────────────────").cyan());
     eprintln!(
-        "│ device_id:          {}",
+        "│ {}:          {}",
+        style("device_id").bold(),
         cfg.device_id.as_deref().unwrap_or("<prompt on startup>")
     );
     eprintln!(
-        "│ device_name:        {}",
+        "│ {}:        {}",
+        style("device_name").bold(),
         cfg.device_name.as_deref().unwrap_or("<not set>")
     );
     eprintln!(
-        "│ language:           {}",
+        "│ {}:           {}",
+        style("language").bold(),
         cfg.language.as_deref().unwrap_or("auto")
     );
     eprintln!(
-        "│ model:              {}",
+        "│ {}:              {}",
+        style("model").bold(),
         cfg.model.as_deref().unwrap_or("<not set>")
     );
-    eprintln!("│ hotkey:             {}", cfg.hotkey);
-    eprintln!("│ model_search_dirs:  {:?}", cfg.model_search_dirs);
-    eprintln!("│ log_dir:            {}", cfg.log_dir);
-    eprintln!("│ log_level:          {}", cfg.log_level);
-    eprintln!("│ log_format:         {}", cfg.log_format);
-    eprintln!("│ log_retention:      {}h", cfg.log_retention_hours);
-    eprintln!("└─────────────────────────────────────────────────────");
+    eprintln!("│ {}:             {}", style("hotkey").bold(), cfg.hotkey);
+    eprintln!("│ {}:  {:?}", style("model_search_dirs").bold(), cfg.model_search_dirs);
+    eprintln!("│ {}:            {}", style("log_dir").bold(), cfg.log_dir);
+    eprintln!("│ {}:          {}", style("log_level").bold(), cfg.log_level);
+    eprintln!("│ {}:         {}", style("log_format").bold(), cfg.log_format);
+    eprintln!("│ {}:      {}h", style("log_retention").bold(), cfg.log_retention_hours);
+    eprintln!("{}", style("└─────────────────────────────────────────────────────").cyan());
 
     if !force {
-        eprint!("\n✏  Edit config? [y/N]: ");
+        eprint!("\n{}  ", style("✏").green());
+        eprint!("{} ", style("Edit config?").bold());
+        eprint!("[y/N]: ");
         std::io::stderr().flush().ok();
         let mut input = String::new();
         std::io::stdin().read_line(&mut input).ok();
@@ -47,14 +54,14 @@ pub fn review_config(cfg: &mut config::Config, force: bool) -> Result<()> {
             return Ok(());
         }
     } else {
-        eprintln!("\n⚠  Model not configured or file missing — setup required.");
+        eprintln!("\n{}  Model not configured or file missing — setup required.", style("⚠").yellow());
     }
 
     let mut input = String::new();
 
     // -- Step 1: Model search dirs FIRST (before model selection) --
     eprintln!();
-    eprintln!("─── Model search directories ─────────────────────────");
+    eprintln!("{}", style("─── Model search directories ─────────────────────────").cyan());
     eprintln!("These directories are scanned for ggml-*.bin files.");
     let cur_dirs = cfg.model_search_dirs.join(", ");
     eprint!("Directories (comma-separated) [{cur_dirs}]: ");
@@ -72,31 +79,32 @@ pub fn review_config(cfg: &mut config::Config, force: bool) -> Result<()> {
 
     // -- Step 2: Scan with the (possibly updated) dirs, pick model --
     eprintln!();
-    eprintln!("─── Model selection ──────────────────────────────────");
+    eprintln!("{}", style("─── Model selection ──────────────────────────────────").cyan());
     let models = scan_all_models(&cfg.model_search_dirs);
     if models.is_empty() {
         eprintln!(
-            "⚠  No ggml-*.bin models found in: {dirs:?}",
+            "{}  No ggml-*.bin models found in: {dirs:?}",
+            style("⚠").yellow(),
             dirs = cfg.model_search_dirs
         );
     } else {
-        eprintln!("┌─ Available models ───────────────────────────────────");
+        eprintln!("{}", style("┌─ Available models ───────────────────────────────────").cyan());
         for (i, m) in models.iter().enumerate() {
             let mark = if Some(&m.to_string_lossy().to_string()) == cfg.model.as_ref() {
-                " ← current"
+                style(" ← current").green()
             } else {
-                ""
+                style("").dim()
             };
-            eprintln!("│ [{n}] {path}{mark}", n = i + 1, path = m.display());
+            eprintln!("│ [{n}] {path}{mark}", n = style(i + 1).yellow(), path = m.display());
         }
-        eprintln!("└──────────────────────────────────────────────────────");
+        eprintln!("{}", style("└──────────────────────────────────────────────────────").cyan());
     }
 
     eprintln!();
-    eprintln!("Options:");
-    eprintln!("  1. Select from found models");
-    eprintln!("  2. Download model from HuggingFace");
-    eprintln!("  3. Skip (will retry on next start)");
+    eprintln!("{}", style("Options:").bold());
+    eprintln!("  {}. Select from found models", style("1").yellow());
+    eprintln!("  {}. Download model from HuggingFace", style("2").yellow());
+    eprintln!("  {}. Skip (will retry on next start)", style("3").yellow());
     eprint!("Choose option [1]: ");
     std::io::stderr().flush().ok();
     input.clear();
@@ -110,13 +118,14 @@ pub fn review_config(cfg: &mut config::Config, force: bool) -> Result<()> {
             match download_model_from_huggingface(&cfg.model_search_dirs, has_configured_model) {
                 Ok(Some(path)) => {
                     cfg.model = Some(path.to_string_lossy().to_string());
+                    eprintln!("{} Model saved: {}", style("✓").green(), path.display());
                 }
                 Ok(None) => {
                     // User chose to skip
                     return Ok(());
                 }
                 Err(e) => {
-                    eprintln!("⚠  Failed to download model: {e}");
+                    eprintln!("{}  Failed to download model: {e}", style("⚠").yellow());
                     if cfg.model.is_none() && models.is_empty() {
                         return Ok(());
                     }
@@ -124,7 +133,7 @@ pub fn review_config(cfg: &mut config::Config, force: bool) -> Result<()> {
             }
         }
         "3" => {
-            eprintln!("⚠  No model selected — will retry on next start.");
+            eprintln!("{}  No model selected — will retry on next start.", style("⚠").yellow());
             if cfg.model.is_none() && models.is_empty() {
                 return Ok(());
             }
@@ -132,14 +141,14 @@ pub fn review_config(cfg: &mut config::Config, force: bool) -> Result<()> {
         _ => {
             // Select from found models (default)
             if models.is_empty() {
-                eprintln!("⚠  No models found. Please download a model first.");
+                eprintln!("{}  No models found. Please download a model first.", style("⚠").yellow());
                 return Ok(());
             }
 
             // If no model is configured, pre-select the first one
             if cfg.model.is_none() && !models.is_empty() {
                 cfg.model = Some(models[0].to_string_lossy().to_string());
-                eprintln!("✓ Auto-selected first model: {}", models[0].display());
+                eprintln!("{} Auto-selected first model: {}", style("✓").green(), models[0].display());
                 eprintln!("  (enter index to choose a different model)");
             }
 
@@ -155,29 +164,31 @@ pub fn review_config(cfg: &mut config::Config, force: bool) -> Result<()> {
                     if idx >= 1 {
                         if let Some(m) = models.get(idx - 1) {
                             cfg.model = Some(m.to_string_lossy().to_string());
+                            eprintln!("{} Model updated: {}", style("✓").green(), m.display());
                         } else {
-                            eprintln!("⚠  Invalid index");
+                            eprintln!("{}  Invalid index", style("⚠").yellow());
                         }
                     } else {
-                        eprintln!("⚠  Invalid index");
+                        eprintln!("{}  Invalid index", style("⚠").yellow());
                     }
                 } else {
-                    eprintln!("⚠  Enter a numeric index");
+                    eprintln!("{}  Enter a numeric index", style("⚠").yellow());
                 }
             }
         }
     }
 
     if force && cfg.model.is_none() {
-        eprintln!("⚠  No model selected — will retry on next start.");
+        eprintln!("{}  No model selected — will retry on next start.", style("⚠").yellow());
         return Ok(());
     }
 
     // -- Remaining settings (skip in force mode unless user wants to) --
     if force {
         eprintln!();
-        eprintln!("─── Remaining settings ───────────────────────────────");
-        eprint!("Review other settings? [y/N]: ");
+        eprintln!("{}", style("─── Remaining settings ───────────────────────────────").cyan());
+        eprint!("{} ", style("Review other settings?").bold());
+        eprint!("[y/N]: ");
         std::io::stderr().flush().ok();
         input.clear();
         std::io::stdin().read_line(&mut input).ok();
@@ -198,22 +209,37 @@ pub fn edit_remaining_settings(cfg: &mut config::Config) {
     let devices = match recorder::list_input_devices() {
         Ok(devs) => devs,
         Err(e) => {
-            eprintln!("⚠  Could not list devices: {e}");
+            eprintln!("{}  Could not list devices: {e}", style("⚠").yellow());
             eprintln!("  Keeping current device");
             return;
         }
     };
 
     eprintln!();
-    eprintln!("Device:");
-    eprintln!("┌─ Available input devices ────────────────────────────");
+    eprintln!("{}", style("Device:").bold().cyan());
+    eprintln!("{}", style("┌─ Available input devices ────────────────────────────").cyan());
     for d in &devices {
         let is_current = cfg.device_id.as_ref().map_or(false, |id| id == &d.id);
-        let marker = if is_current { " (current)" } else if d.is_default { " (default)" } else { "" };
-        eprintln!("│ [{n}] {name}", n = d.index + 1, name = d.name);
-        eprintln!("│     ID: {id} | {cfg}{marker}", id = d.id, cfg = d.config);
+        let marker = if is_current {
+            style(" (current)").green()
+        } else if d.is_default {
+            style(" (default)").dim()
+        } else {
+            style("").dim()
+        };
+        eprintln!(
+            "│ [{n}] {name}",
+            n = style(d.index + 1).yellow(),
+            name = style(&d.name).bold()
+        );
+        eprintln!(
+            "│     ID: {id} | {cfg}{marker}",
+            id = style(&d.id).dim(),
+            cfg = d.config,
+            marker = marker
+        );
     }
-    eprintln!("└──────────────────────────────────────────────────────");
+    eprintln!("{}", style("└──────────────────────────────────────────────────────").cyan());
 
     // Find current device number for the prompt
     let current_num = cfg.device_id.as_ref().and_then(|id| {
@@ -243,20 +269,21 @@ pub fn edit_remaining_settings(cfg: &mut config::Config) {
                 cfg.device_id = Some(d.id.clone());
                 cfg.device_name = Some(d.name.clone());
                 pb.set_position((idx - 1) as u64);
-                pb.finish_with_message("✓ Device updated");
+                pb.finish_with_message(format!("{} Device updated", style("✓").green()));
             } else {
-                pb.finish_with_message("⚠  Invalid index – keeping current device");
+                pb.finish_with_message(format!("{}  Invalid index – keeping current device", style("⚠").yellow()));
             }
         } else {
-            pb.finish_with_message("⚠  Invalid input – keeping current device");
+            pb.finish_with_message(format!("{}  Invalid input – keeping current device", style("⚠").yellow()));
         }
     } else {
-        pb.finish_with_message(format!("✓ Keeping device {current_num}"));
+        pb.finish_with_message(format!("{} Keeping device {current_num}", style("✓").green()));
     }
 
     // -- Edit language --
     eprintln!();
-    eprintln!("Language (ISO 639-1 code, or 'auto'):");
+    eprintln!("{}", style("Language").bold().cyan());
+    eprintln!("  ISO 639-1 code, or 'auto'");
     let cur_lang = cfg.language.as_deref().unwrap_or("auto");
     eprint!("Language [{cur_lang}]: ");
     std::io::stderr().flush().ok();
@@ -264,26 +291,32 @@ pub fn edit_remaining_settings(cfg: &mut config::Config) {
     std::io::stdin().read_line(&mut input).ok();
     let lang_val = input.trim().to_string();
     if !lang_val.is_empty() {
-        cfg.language = Some(lang_val);
+        cfg.language = Some(lang_val.clone());
+        eprintln!("{} Language updated: {}", style("✓").green(), lang_val);
     }
 
     // -- Edit hotkey --
     eprintln!();
-    eprintln!("Hotkey (format: Mod+Mod+Key, e.g. Ctrl+Shift+T):");
+    eprintln!("{}", style("Hotkey").bold().cyan());
+    eprintln!("  Format: Mod+Mod+Key, e.g. Ctrl+Shift+T");
     eprintln!(
-        "Modifiers: Ctrl, Shift, Alt, {win}",
+        "  Modifiers: Ctrl, Shift, Alt, {win}",
         win = mod_win_label().trim_end_matches('+'),
     );
     eprintln!();
-    eprintln!("┌─ Supported keys ──────────────────────────────────────");
+    eprintln!("{}", style("┌─ Supported keys ──────────────────────────────────────").cyan());
     for (name, aliases) in hotkey::supported_keys() {
         if aliases.len() == 1 {
-            eprintln!("│ {name}");
+            eprintln!("│ {name}", name = style(name).yellow());
         } else {
-            eprintln!("│ {name}  ({})", aliases[1..].join(", "));
+            eprintln!(
+                "│ {name}  ({aliases})",
+                name = style(name).yellow(),
+                aliases = aliases[1..].join(", ")
+            );
         }
     }
-    eprintln!("└──────────────────────────────────────────────────────");
+    eprintln!("{}", style("└──────────────────────────────────────────────────────").cyan());
     eprint!("\nHotkey [{}]: ", cfg.hotkey);
     std::io::stderr().flush().ok();
     input.clear();
@@ -291,26 +324,31 @@ pub fn edit_remaining_settings(cfg: &mut config::Config) {
     let val = input.trim().to_string();
     if !val.is_empty() {
         match hotkey::parse_hotkey(&val) {
-            Ok(_) => cfg.hotkey = val,
-            Err(e) => eprintln!("⚠  Invalid hotkey: {e} — keeping current"),
+            Ok(_) => {
+                cfg.hotkey = val.clone();
+                eprintln!("{} Hotkey updated: {}", style("✓").green(), val);
+            }
+            Err(e) => eprintln!("{}  Invalid hotkey: {e} — keeping current", style("⚠").yellow()),
         }
     }
 
     // -- Edit log dir --
     eprintln!();
-    eprintln!("Log directory:");
+    eprintln!("{}", style("Log directory").bold().cyan());
     eprint!("Log dir [{}]: ", cfg.log_dir);
     std::io::stderr().flush().ok();
     input.clear();
     std::io::stdin().read_line(&mut input).ok();
     let val = input.trim().to_string();
     if !val.is_empty() {
-        cfg.log_dir = val;
+        cfg.log_dir = val.clone();
+        eprintln!("{} Log directory updated: {}", style("✓").green(), val);
     }
 
     // -- Edit log level --
     eprintln!();
-    eprintln!("Log level (trace, debug, info, warn, error):");
+    eprintln!("{}", style("Log level").bold().cyan());
+    eprintln!("  Options: trace, debug, info, warn, error");
     eprint!("Log level [{}]: ", cfg.log_level);
     std::io::stderr().flush().ok();
     input.clear();
@@ -319,15 +357,17 @@ pub fn edit_remaining_settings(cfg: &mut config::Config) {
     if !val.is_empty() {
         let lv = val.to_lowercase();
         if matches!(lv.as_str(), "trace" | "debug" | "info" | "warn" | "error") {
-            cfg.log_level = lv;
+            cfg.log_level = lv.clone();
+            eprintln!("{} Log level updated: {}", style("✓").green(), lv);
         } else {
-            eprintln!("⚠  Invalid level — keeping current");
+            eprintln!("{}  Invalid level — keeping current", style("⚠").yellow());
         }
     }
 
     // -- Edit log format --
     eprintln!();
-    eprintln!("Log format (text or json):");
+    eprintln!("{}", style("Log format").bold().cyan());
+    eprintln!("  Options: text, json");
     eprint!("Format [{}]: ", cfg.log_format);
     std::io::stderr().flush().ok();
     input.clear();
@@ -335,15 +375,17 @@ pub fn edit_remaining_settings(cfg: &mut config::Config) {
     let val = input.trim().to_lowercase();
     if !val.is_empty() {
         if matches!(val.as_str(), "text" | "json") {
-            cfg.log_format = val;
+            cfg.log_format = val.clone();
+            eprintln!("{} Log format updated: {}", style("✓").green(), val);
         } else {
-            eprintln!("⚠  Invalid format — use 'text' or 'json'");
+            eprintln!("{}  Invalid format — use 'text' or 'json'", style("⚠").yellow());
         }
     }
 
     // -- Edit log retention --
     eprintln!();
-    eprintln!("Log retention in hours (rotated files older than this are deleted):");
+    eprintln!("{}", style("Log retention").bold().cyan());
+    eprintln!("  Rotated files older than this are deleted (in hours)");
     eprint!("Retention hours [{}]: ", cfg.log_retention_hours);
     std::io::stderr().flush().ok();
     input.clear();
@@ -353,11 +395,12 @@ pub fn edit_remaining_settings(cfg: &mut config::Config) {
         if let Ok(n) = val.parse::<u64>() {
             if n > 0 {
                 cfg.log_retention_hours = n;
+                eprintln!("{} Log retention updated: {}h", style("✓").green(), n);
             } else {
-                eprintln!("⚠  Must be at least 1");
+                eprintln!("{}  Must be at least 1", style("⚠").yellow());
             }
         } else {
-            eprintln!("⚠  Not a number");
+            eprintln!("{}  Not a number", style("⚠").yellow());
         }
     }
 }
