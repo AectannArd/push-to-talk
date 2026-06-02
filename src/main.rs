@@ -194,6 +194,7 @@ fn main() -> Result<()> {
     {
         info!("💡 If text typing doesn't work:");
         info!("   System Settings → Privacy & Security → Input Monitoring");
+        info!("   System Settings → Privacy & Security → Automation (for AppleScript)");
         info!("   Add your terminal app or push-to-talk.app");
     }
 
@@ -319,38 +320,100 @@ fn main() -> Result<()> {
                     info!("📝 \"{}\"", text);
                     std::thread::sleep(std::time::Duration::from_millis(80));
 
-                    // Type text into active window
-                    match enigo::Enigo::new(&enigo::Settings::default()) {
-                        Ok(mut enigo) => {
-                            use enigo::Keyboard;
-                            match enigo.text(&text) {
-                                Ok(()) => {
-                                    info!("⌨  Text typed into active window: \"{}\"", text);
-                                }
-                                Err(e) => {
-                                    error!("⚠  Failed to type text: {e}");
-                                    error!("💡 Check System Settings → Privacy & Security → Input Monitoring");
-                                }
-                            }
-                        }
-                        Err(e) => {
-                            error!("⚠  Failed to initialise keyboard input: {e}");
-                            error!("💡 Check System Settings → Privacy & Security → Accessibility");
-                        }
-                    }
-
-                    // Also copy to clipboard as fallback
-                    match arboard::Clipboard::new() {
+                    // Copy to clipboard first (required for paste fallback)
+                    let clipboard_success = match arboard::Clipboard::new() {
                         Ok(mut clip) => {
                             if let Err(e) = clip.set_text(&text) {
                                 warn!("⚠  Failed to copy to clipboard: {e}");
+                                false
                             } else {
                                 info!("📋 Copied to clipboard");
+                                true
                             }
                         }
                         Err(e) => {
                             warn!("⚠  Failed to access clipboard: {e}");
+                            false
                         }
+                    };
+
+                    // Try AppleScript to paste (most reliable on macOS)
+                    let mut typed_success = false;
+                    
+                    if clipboard_success {
+                        // Small delay to ensure clipboard is ready
+                        std::thread::sleep(std::time::Duration::from_millis(100));
+                        
+                        // Use osascript to paste via AppleScript
+                        use std::process::Command;
+                        match Command::new("osascript")
+                            .args([
+                                "-e",
+                                "tell application \"System Events\" to keystroke \"v\" using command down"
+                            ])
+                            .output()
+                        {
+                            Ok(output) => {
+                                if output.status.success() {
+                                    typed_success = true;
+                                    info!("⌨  Text pasted via AppleScript: \"{}\"", text);
+                                } else {
+                                    let stderr = String::from_utf8_lossy(&output.stderr);
+                                    error!("⚠  AppleScript paste failed: {}", stderr);
+                                }
+                            }
+                            Err(e) => {
+                                error!("⚠  Failed to run osascript: {e}");
+                            }
+                        }
+                    }
+
+                    // Fallback: try enigo if AppleScript failed
+                    if !typed_success && clipboard_success {
+                        match enigo::Enigo::new(&enigo::Settings::default()) {
+                            Ok(mut enigo) => {
+                                use enigo::Keyboard;
+                                use enigo::Key;
+                                // Try Cmd+V via enigo
+                                if enigo.key(Key::Meta, enigo::Direction::Press).is_ok() {
+                                    if enigo.key(Key::Unicode('v'), enigo::Direction::Press).is_ok() {
+                                        std::thread::sleep(std::time::Duration::from_millis(50));
+                                        let _ = enigo.key(Key::Unicode('v'), enigo::Direction::Release);
+                                        let _ = enigo.key(Key::Meta, enigo::Direction::Release);
+                                        typed_success = true;
+                                        info!("⌨  Text pasted via enigo: \"{}\"", text);
+                                    } else {
+                                        let _ = enigo.key(Key::Meta, enigo::Direction::Release);
+                                    }
+                                }
+                            }
+                            Err(e) => {
+                                error!("⚠  Failed to initialise enigo: {e}");
+                            }
+                        }
+                    }
+
+                    // Final fallback: direct text input
+                    if !typed_success && clipboard_success {
+                        match enigo::Enigo::new(&enigo::Settings::default()) {
+                            Ok(mut enigo) => {
+                                use enigo::Keyboard;
+                                if enigo.text(&text).is_ok() {
+                                    info!("⌨  Text typed via enigo.text(): \"{}\"", text);
+                                } else {
+                                    error!("⚠  All text insertion methods failed");
+                                }
+                            }
+                            Err(e) => {
+                                error!("⚠  Failed to initialise enigo for text(): {e}");
+                            }
+                        }
+                    }
+
+                    if !clipboard_success {
+                        error!("💡 Clipboard access failed - text insertion not possible");
+                    } else if !typed_success {
+                        warn!("💡 Text is in clipboard - press Cmd+V to paste manually");
                     }
                 }
                 Err(e) => error!("❌ Transcription error: {e}"),
