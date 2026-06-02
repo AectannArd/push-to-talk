@@ -67,6 +67,73 @@ Thank you for considering contributing to push-to-talk! This document provides g
   # No additional dependencies required
   ```
 
+### macOS Permissions
+
+The application requires the following macOS permissions to function correctly:
+
+| Permission | Purpose | Required For |
+|------------|---------|--------------|
+| **Accessibility** | Global hotkey detection (rdev) | Capturing modifier keys (Ctrl, Shift, Alt, Cmd) |
+| **Input Monitoring** | Keyboard input simulation (enigo) | Typing transcribed text into active applications |
+| **Automation** | AppleScript-based paste fallback | Reliable text insertion via System Events |
+
+#### Granting Permissions
+
+1. **System Settings → Privacy & Security → Accessibility**
+   - Add your terminal app (e.g., iTerm2, Terminal) or `push-to-talk.app`
+   - Toggle the switch to enable
+
+2. **System Settings → Privacy & Security → Input Monitoring**
+   - Add your terminal app or `push-to-talk.app`
+   - Toggle the switch to enable
+
+3. **System Settings → Privacy & Security → Automation**
+   - Add your terminal app or `push-to-talk.app`
+   - Enable "System Events" checkbox
+
+#### Resetting Permissions (Troubleshooting)
+
+If text insertion stops working or permissions become corrupted, reset them:
+
+```bash
+# Reset Accessibility permissions
+tccutil reset Accessibility ru.tcsbank.push-to-talk
+
+# Reset Input Monitoring permissions
+tccutil reset InputMonitoring ru.tcsbank.push-to-talk
+
+# Reset Automation permissions
+tccutil reset Automation ru.tcsbank.push-to-talk
+
+# Reset all permissions for the app
+tccutil reset All ru.tcsbank.push-to-talk
+```
+
+**Note:** The bundle identifier `ru.tcsbank.push-to-talk` is used when running from a `.app` bundle. For CLI usage, permissions are granted to the terminal application itself (e.g., `com.googlecode.iterm2` for iTerm2).
+
+After resetting, restart the application and re-grant permissions when prompted.
+
+#### Verifying Permissions
+
+Check if permissions are granted:
+
+```bash
+# Check Accessibility (returns 0 if granted)
+osascript -e 'tell application "System Events" to keystroke "tab"' 2>&1
+
+# Check if app is in Accessibility list
+defaults read com.apple.universalaccessAssistiveApplications 2>/dev/null | grep -i "terminal\|iterm\|push-to-talk"
+```
+
+#### Common Issues
+
+| Symptom | Likely Cause | Solution |
+|---------|--------------|----------|
+| Hotkey not working | Missing Accessibility | Grant Accessibility permission |
+| Text not appearing in apps | Missing Input Monitoring | Grant Input Monitoring permission |
+| AppleScript errors | Missing Automation | Grant Automation → System Events |
+| Permissions reset after update | macOS security | Re-grant all permissions |
+
 ### Build Commands
 
 ```bash
