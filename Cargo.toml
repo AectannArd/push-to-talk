@@ -37,6 +37,7 @@ windows = { version = "0.56", features = [
   "Win32_UI_Shell",
 ] }
 
-# macOS: Metal + CoreML GPU, no tray dependency needed
+# macOS: Metal + CoreML GPU
 [target.'cfg(target_os = "macos")'.dependencies]
 whisper-rs = { version = "0.15", features = ["metal", "coreml", "log_backend"] }
+objc2-foundation = { version = "0.3", features = ["NSString", "std"] }

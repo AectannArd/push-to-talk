@@ -1,4 +1,5 @@
 //! System tray icon: shows idle/recording state via tooltip.
+//! Note: macOS tray disabled due to API changes in macOS 26+
 
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -25,11 +26,14 @@ pub fn spawn() -> TrayHandle {
     #[cfg(windows)]
     {
         let vis = visible.clone();
-        thread::spawn(move || {
+        std::thread::spawn(move || {
             win::run(vis);
         });
-        thread::sleep(std::time::Duration::from_millis(200));
+        std::thread::sleep(std::time::Duration::from_millis(200));
     }
+
+    // macOS: tray disabled - use console indicator instead
+    // Linux: no native tray without additional dependencies
 
     TrayHandle { visible }
 }

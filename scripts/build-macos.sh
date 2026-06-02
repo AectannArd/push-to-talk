@@ -22,7 +22,16 @@ mkdir -p "$DIST_DIR"
 echo "📦 Building release binary..."
 cargo build --release --target "$(rustc -vV | grep host | cut -d' ' -f2)"
 
+# Verify binary was built
+if [[ ! -f "$PROJECT_ROOT/target/release/$APP_NAME" ]]; then
+    echo "❌ Error: Binary not found at target/release/$APP_NAME"
+    exit 1
+fi
+
+echo "✓ Binary built successfully"
+
 # Create app bundle structure
+echo "📦 Creating app bundle..."
 APP_BUNDLE="$DIST_DIR/${APP_NAME}.app"
 mkdir -p "$APP_BUNDLE/Contents/MacOS"
 mkdir -p "$APP_BUNDLE/Contents/Resources"
@@ -32,7 +41,37 @@ mkdir -p "$APP_BUNDLE/Contents/Frameworks"
 cp "$PROJECT_ROOT/target/release/$APP_NAME" "$APP_BUNDLE/Contents/MacOS/"
 chmod +x "$APP_BUNDLE/Contents/MacOS/$APP_NAME"
 
-# Create Info.plist
+# Convert logo to app icon (if logo.png exists)
+if [[ -f "$PROJECT_ROOT/logo.png" ]]; then
+    echo "🎨 Converting logo to app icon..."
+    ICONSET="$APP_BUNDLE/Contents/Resources/icon.iconset"
+    mkdir -p "$ICONSET"
+    
+    # Generate all required icon sizes
+    sips -z 16 16 "$PROJECT_ROOT/logo.png" --out "$ICONSET/icon_16x16.png" >/dev/null 2>&1
+    sips -z 32 32 "$PROJECT_ROOT/logo.png" --out "$ICONSET/icon_16x16@2x.png" >/dev/null 2>&1
+    sips -z 32 32 "$PROJECT_ROOT/logo.png" --out "$ICONSET/icon_32x32.png" >/dev/null 2>&1
+    sips -z 64 64 "$PROJECT_ROOT/logo.png" --out "$ICONSET/icon_32x32@2x.png" >/dev/null 2>&1
+    sips -z 128 128 "$PROJECT_ROOT/logo.png" --out "$ICONSET/icon_128x128.png" >/dev/null 2>&1
+    sips -z 256 256 "$PROJECT_ROOT/logo.png" --out "$ICONSET/icon_128x128@2x.png" >/dev/null 2>&1
+    sips -z 256 256 "$PROJECT_ROOT/logo.png" --out "$ICONSET/icon_256x256.png" >/dev/null 2>&1
+    sips -z 512 512 "$PROJECT_ROOT/logo.png" --out "$ICONSET/icon_256x256@2x.png" >/dev/null 2>&1
+    sips -z 512 512 "$PROJECT_ROOT/logo.png" --out "$ICONSET/icon_512x512.png" >/dev/null 2>&1
+    sips -z 1024 1024 "$PROJECT_ROOT/logo.png" --out "$ICONSET/icon_512x512@2x.png" >/dev/null 2>&1
+    
+    # Convert iconset to icns
+    if command -v iconutil &> /dev/null; then
+        iconutil -c icns "$ICONSET" -o "$APP_BUNDLE/Contents/Resources/app.icns" 2>/dev/null
+        rm -rf "$ICONSET"
+        echo "✓ App icon created: app.icns"
+    else
+        # Fallback: just copy the 512x512 version
+        sips -z 512 512 "$PROJECT_ROOT/logo.png" --out "$APP_BUNDLE/Contents/Resources/app.icns" >/dev/null 2>&1 || true
+        rm -rf "$ICONSET"
+    fi
+fi
+
+# Create Info.plist with required permissions
 cat > "$APP_BUNDLE/Contents/Info.plist" <<EOF
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -58,10 +97,18 @@ cat > "$APP_BUNDLE/Contents/Info.plist" <<EOF
     </array>
     <key>LSMinimumSystemVersion</key>
     <string>12.0</string>
+    <key>CFBundleIconFile</key>
+    <string>app</string>
     <key>NSMicrophoneUsageDescription</key>
     <string>This app requires microphone access to record audio for transcription.</string>
     <key>NSAppleEventsUsageDescription</key>
-    <string>This app requires accessibility access to type transcribed text into active windows.</string>
+    <string>This app requires accessibility access to detect global hotkeys and type transcribed text.</string>
+    <key>NSAccessibilityUsageDescription</key>
+    <string>This app requires accessibility access to detect global hotkeys and type transcribed text into active windows.</string>
+    <key>NSSystemPolicyAllFiles</key>
+    <string>This app needs full disk access to read configuration and write logs.</string>
+    <key>LSUIElement</key>
+    <false/>
 </dict>
 </plist>
 EOF
@@ -103,6 +150,8 @@ echo "📦 Installing $APP_NAME..."
 # Check if app bundle exists
 if [[ ! -d "${APP_NAME}.app" ]]; then
     echo "❌ Error: ${APP_NAME}.app not found in current directory"
+    echo ""
+    echo "💡 Tip: If you downloaded from DMG, drag ${APP_NAME}.app to /Applications"
     exit 1
 fi
 
@@ -250,20 +299,110 @@ UNINSTALL_EOF
 
 chmod +x "$DIST_DIR/uninstall.sh"
 
+# Verify app bundle structure
+echo "🔍 Verifying app bundle..."
+if [[ ! -d "$APP_BUNDLE" ]]; then
+    echo "❌ Error: App bundle not found at $APP_BUNDLE"
+    exit 1
+fi
+if [[ ! -x "$APP_BUNDLE/Contents/MacOS/$APP_NAME" ]]; then
+    echo "❌ Error: Binary not executable in app bundle"
+    exit 1
+fi
+echo "✓ App bundle verified: $APP_BUNDLE"
+
+# Create DMG (if hdiutil is available)
+DMG_SOURCE="$DIST_DIR/.dmg-source"
+rm -rf "$DMG_SOURCE"
+mkdir -p "$DMG_SOURCE"
+
+# Copy only app bundle to DMG source
+cp -R "$APP_BUNDLE" "$DMG_SOURCE/"
+
 # Create DMG (if hdiutil is available)
 if command -v hdiutil &> /dev/null; then
     echo "📀 Creating DMG..."
     DMG_FILE="$DIST_DIR/${APP_NAME}-v${VERSION}.dmg"
+    DMG_TEMP="$DIST_DIR/.temp.dmg"
+    DMG_RW="$DIST_DIR/.rw.dmg"
     
-    # Create temporary DMG
-    hdiutil create -volname "$APP_NAME" \
-        -srcfolder "$DIST_DIR" \
+    # Clean up any previous attempts
+    rm -f "$DMG_FILE" "$DMG_TEMP" "$DMG_RW" 2>/dev/null
+    
+    # Step 1: Create initial DMG from source folder
+    echo "  Creating initial DMG..."
+    if ! hdiutil create -volname "$APP_NAME" \
+        -srcfolder "$DMG_SOURCE" \
         -ov -format UDZO \
-        "$DMG_FILE" 2>/dev/null || {
-        echo "⚠  DMG creation failed, skipping..."
-    }
+        "$DMG_TEMP" 2>&1; then
+        echo "⚠  Failed to create initial DMG"
+        rm -f "$DMG_TEMP"
+    fi
     
-    if [[ -f "$DMG_FILE" ]]; then
+    # Step 2: Create DMG with custom layout (Applications symlink)
+    if [[ -f "$DMG_TEMP" ]]; then
+        echo "  Adding Applications symlink and layout..."
+        
+        # Convert to read/write
+        hdiutil convert "$DMG_TEMP" -format UDRW -o "$DMG_RW" >/dev/null 2>&1
+        
+        if [[ -f "$DMG_RW" ]]; then
+            # Mount the DMG
+            MOUNT_POINT="/Volumes/$APP_NAME"
+            hdiutil detach "$MOUNT_POINT" 2>/dev/null || true
+            
+            if hdiutil attach "$DMG_RW" -mountpoint "$MOUNT_POINT" -nobrowse 2>/dev/null; then
+                # Create Applications symlink
+                ln -s /Applications "$MOUNT_POINT/Applications"
+                
+                # Hide unwanted files
+                chflags hidden "$MOUNT_POINT/.fseventsd" 2>/dev/null || true
+                
+                # Use AppleScript to set custom view (no background image)
+                osascript -e "
+                tell application \"Finder\"
+                    tell disk \"$APP_NAME\"
+                        open
+                        set current view of container window to icon view
+                        set toolbar visible of container window to false
+                        set statusbar visible of container window to false
+                        set bounds of container window to {400, 100, 900, 450}
+                        set theViewOptions to the icon view options of container window
+                        set arrangement of theViewOptions to not arranged
+                        set icon size of theViewOptions to 80
+                        set position of item \"push-to-talk.app\" of container window to {150, 180}
+                        set position of item \"Applications\" of container window to {350, 180}
+                        close
+                    end tell
+                end tell
+                " 2>/dev/null || echo "  ⚠  AppleScript customization skipped (CI environment)"
+                
+                sleep 2
+                hdiutil detach "$MOUNT_POINT" 2>/dev/null || true
+                
+                # Convert back to read-only compressed
+                hdiutil convert "$DMG_RW" -format UDZO -o "$DMG_FILE" >/dev/null 2>&1
+                if [[ -f "$DMG_FILE" ]]; then
+                    echo "✓ Created: $DMG_FILE (with custom layout)"
+                else
+                    cp "$DMG_RW" "$DMG_FILE"
+                    echo "✓ Created: $DMG_FILE (read/write)"
+                fi
+                rm -f "$DMG_RW"
+            else
+                cp "$DMG_RW" "$DMG_FILE"
+                echo "✓ Created: $DMG_FILE (without customization)"
+                rm -f "$DMG_RW"
+            fi
+        else
+            cp "$DMG_TEMP" "$DMG_FILE"
+            echo "✓ Created: $DMG_FILE (standard)"
+        fi
+        
+        # Cleanup
+        rm -f "$DMG_TEMP" 2>/dev/null
+    elif [[ -f "$DMG_TEMP" ]]; then
+        mv "$DMG_TEMP" "$DMG_FILE"
         echo "✓ Created: $DMG_FILE"
     fi
 fi

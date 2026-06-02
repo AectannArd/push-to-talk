@@ -38,10 +38,35 @@ struct Cli {
     debug_voice_record: bool,
 }
 
+/// Check if running from a macOS .app bundle (launched via Finder/Dock)
+fn is_running_from_app_bundle() -> bool {
+    #[cfg(target_os = "macos")]
+    {
+        // When launched from Finder/Dock, macOS passes -NSDocumentRevisionsDebugMode
+        // and other NS* arguments. Also, we're typically inside Contents/MacOS/
+        if let Ok(exe_path) = std::env::current_exe() {
+            let path_str = exe_path.to_string_lossy();
+            if path_str.contains(".app/Contents/MacOS/") {
+                return true;
+            }
+        }
+        // Check for NS* arguments (passed by Cocoa when launched from Finder)
+        for arg in std::env::args() {
+            if arg.starts_with("-NS") || arg.starts_with("-Apple") {
+                return true;
+            }
+        }
+    }
+    false
+}
+
 // ---- main ----------------------------------------------------------------
 
 fn main() -> Result<()> {
     let cli = Cli::parse();
+
+    // Auto-detect non-interactive mode when launched from .app bundle (Finder/Dock)
+    let non_interactive = cli.non_interactive || is_running_from_app_bundle();
 
     // ---- load config -------------------------------------------------------
     let cfg_path = cli.config.clone();
@@ -49,7 +74,7 @@ fn main() -> Result<()> {
 
     // ---- validate model -----------------------------------------------------
     let model_missing = cfg.model.as_ref().map_or(true, |m| !Path::new(m).exists());
-    if model_missing && cli.non_interactive {
+    if model_missing && non_interactive {
         anyhow::bail!(
             "Model not configured or file not found.\n\
              Run without --non-interactive to set up the model."
@@ -57,7 +82,7 @@ fn main() -> Result<()> {
     }
 
     // ---- interactive config review (before logger — uses eprintln!) ---------
-    if !cli.non_interactive {
+    if !non_interactive {
         ui::review_config(&mut cfg, model_missing)?;
         cfg.save(&cfg_path);
     }
@@ -123,6 +148,23 @@ fn main() -> Result<()> {
     // Bridge log -> tracing so whisper-rs log_backend output is captured
     tracing_log::LogTracer::init().ok();
 
+    // ---- macOS: check Accessibility permissions ------------------------------
+    #[cfg(target_os = "macos")]
+    {
+        if !check_accessibility_permissions() {
+            eprintln!("❌ Accessibility permissions required for global hotkeys.");
+            eprintln!("📋 Please grant access:");
+            eprintln!("   1. System Settings → Privacy & Security → Accessibility");
+            eprintln!("   2. Add your terminal app or push-to-talk.app");
+            eprintln!("   3. Restart the app");
+            if non_interactive {
+                anyhow::bail!("Accessibility permissions not granted");
+            }
+        } else {
+            info!("✅ Accessibility permissions granted");
+        }
+    }
+
     // Cleanup old log files
     cleanup_old_logs(&log_dir, cfg.log_retention_hours);
 
@@ -148,6 +190,12 @@ fn main() -> Result<()> {
         "📊 Log level: {}, format: {}, retention: {}h",
         cfg.log_level, cfg.log_format, cfg.log_retention_hours,
     );
+    #[cfg(target_os = "macos")]
+    {
+        info!("💡 If text typing doesn't work:");
+        info!("   System Settings → Privacy & Security → Input Monitoring");
+        info!("   Add your terminal app or push-to-talk.app");
+    }
 
     // ---- parse hotkey from config -------------------------------------------
     let parsed_hotkey = hotkey::parse_hotkey(&cfg.hotkey)
@@ -271,16 +319,38 @@ fn main() -> Result<()> {
                     info!("📝 \"{}\"", text);
                     std::thread::sleep(std::time::Duration::from_millis(80));
 
-                    if let Ok(mut enigo) = enigo::Enigo::new(&enigo::Settings::default()) {
-                        use enigo::Keyboard;
-                        let _ = enigo.text(&text);
-                        info!("⌨  Text typed into active window.");
-                    } else {
-                        error!("⚠  Failed to initialise keyboard input.");
+                    // Type text into active window
+                    match enigo::Enigo::new(&enigo::Settings::default()) {
+                        Ok(mut enigo) => {
+                            use enigo::Keyboard;
+                            match enigo.text(&text) {
+                                Ok(()) => {
+                                    info!("⌨  Text typed into active window: \"{}\"", text);
+                                }
+                                Err(e) => {
+                                    error!("⚠  Failed to type text: {e}");
+                                    error!("💡 Check System Settings → Privacy & Security → Input Monitoring");
+                                }
+                            }
+                        }
+                        Err(e) => {
+                            error!("⚠  Failed to initialise keyboard input: {e}");
+                            error!("💡 Check System Settings → Privacy & Security → Accessibility");
+                        }
                     }
 
-                    if let Ok(mut clip) = arboard::Clipboard::new() {
-                        let _ = clip.set_text(&text);
+                    // Also copy to clipboard as fallback
+                    match arboard::Clipboard::new() {
+                        Ok(mut clip) => {
+                            if let Err(e) = clip.set_text(&text) {
+                                warn!("⚠  Failed to copy to clipboard: {e}");
+                            } else {
+                                info!("📋 Copied to clipboard");
+                            }
+                        }
+                        Err(e) => {
+                            warn!("⚠  Failed to access clipboard: {e}");
+                        }
                     }
                 }
                 Err(e) => error!("❌ Transcription error: {e}"),
@@ -304,102 +374,137 @@ fn main() -> Result<()> {
     let need_win = parsed_hotkey.needs_win;
     let tray = tray_icon;
     let ind = indicator;
+    let hotkey_str = cfg.hotkey.clone();
+    let hotkey_for_closure = hotkey_str.clone();
 
     // ---- global-hotkey event loop -------------------------------------------
-    if let Err(e) = rdev::listen(move |event| {
-        match event.event_type {
-            rdev::EventType::KeyPress(key) => {
-                if update_modifier_state(&key, true, &cb_ctrl, &cb_shift, &cb_alt, &cb_win) {
-                    return;
-                }
-                // Only trigger on initial press, not on repeat
-                if key == trigger_key
-                    && !cb_trigger.load(Ordering::SeqCst)  // prevent repeat
-                    && modifier_match(need_ctrl, cb_ctrl.load(Ordering::SeqCst))
-                    && modifier_match(need_shift, cb_shift.load(Ordering::SeqCst))
-                    && modifier_match(need_alt, cb_alt.load(Ordering::SeqCst))
-                    && modifier_match(need_win, cb_win.load(Ordering::SeqCst))
-                    && !cb_is_rec.load(Ordering::SeqCst)
-                {
-                    cb_trigger.store(true, Ordering::SeqCst);  // mark as held
-                    cb_is_rec.store(true, Ordering::SeqCst);
-                    tray.set_recording(true);
-                    ind.set_visible(true);
-                    match rec.start() {
-                        Ok(r) => {
-                            *cb_rec.lock().unwrap() = Some(r);
-                            info!("🎤 Recording... (release to stop)");
-                        }
-                        Err(e) => {
-                            error!("❌ Failed to start recording: {e}");
-                            cb_is_rec.store(false, Ordering::SeqCst);
-                            cb_trigger.store(false, Ordering::SeqCst);
-                            tray.set_recording(false);
-                            ind.set_visible(false);
-                        }
-                    }
-                }
-            }
-
-            rdev::EventType::KeyRelease(key) => {
-                update_modifier_state(&key, false, &cb_ctrl, &cb_shift, &cb_alt, &cb_win);
-                if key == trigger_key && cb_trigger.load(Ordering::SeqCst) {
-                    cb_trigger.store(false, Ordering::SeqCst);  // mark as released
-                    // Log immediately to catch crash point
-                    info!("🛑 Key released, stopping recording...");
-
-                    cb_is_rec.store(false, Ordering::SeqCst);
-                    tray.set_recording(false);
-                    ind.set_visible(false);
-
-                    // Safely stop recording and get audio buffer
-                    let audio = {
-                        let mut guard = match cb_rec.lock() {
-                            Ok(g) => g,
-                            Err(e) => {
-                                error!("❌ Mutex poisoned on recording channel: {e}");
-                                return;
-                            }
-                        };
-                        match guard.take() {
-                            Some(r) => {
-                                info!("🛑 Stopping audio stream...");
-                                r.stop()
-                            }
-                            None => {
-                                warn!("⚠  Recording was None — already taken?");
-                                Vec::new()
-                            }
-                        }
-                    };
-
-                    if audio.is_empty() {
-                        warn!("⚠  No audio captured — recording too short.");
+    info!("🔑 Registering global hotkey...");
+    eprintln!("🔑 Registering global hotkey: {}...", hotkey_str);
+    
+    // Run rdev::listen in a separate thread to avoid blocking main thread
+    let listen_result = std::sync::Arc::new(std::sync::Mutex::new(Ok(())));
+    let listen_result_clone = listen_result.clone();
+    
+    std::thread::spawn(move || {
+        info!("🎧 rdev::listen() starting in background thread...");
+        let result = rdev::listen(move |event| {
+            match event.event_type {
+                rdev::EventType::KeyPress(key) => {
+                    if update_modifier_state(&key, true, &cb_ctrl, &cb_shift, &cb_alt, &cb_win) {
                         return;
                     }
-
-                    info!(
-                        "🛑 Captured {:.1}s — transcribing…",
-                        audio.len() as f64 / 16_000.0
-                    );
-
-                    if let Err(e) = tx.send(audio) {
-                        error!("❌ Failed to send audio to transcription thread: {e}");
+                    // Only trigger on initial press, not on repeat
+                    if key == trigger_key
+                        && !cb_trigger.load(Ordering::SeqCst)  // prevent repeat
+                        && modifier_match(need_ctrl, cb_ctrl.load(Ordering::SeqCst))
+                        && modifier_match(need_shift, cb_shift.load(Ordering::SeqCst))
+                        && modifier_match(need_alt, cb_alt.load(Ordering::SeqCst))
+                        && modifier_match(need_win, cb_win.load(Ordering::SeqCst))
+                        && !cb_is_rec.load(Ordering::SeqCst)
+                    {
+                        cb_trigger.store(true, Ordering::SeqCst);  // mark as held
+                        cb_is_rec.store(true, Ordering::SeqCst);
+                        tray.set_recording(true);
+                        ind.set_visible(true);
+                        match rec.start() {
+                            Ok(r) => {
+                                *cb_rec.lock().unwrap() = Some(r);
+                                info!("🎤 Recording... (release to stop)");
+                            }
+                            Err(e) => {
+                                error!("❌ Failed to start recording: {e}");
+                                cb_is_rec.store(false, Ordering::SeqCst);
+                                cb_trigger.store(false, Ordering::SeqCst);
+                                tray.set_recording(false);
+                                ind.set_visible(false);
+                            }
+                        }
                     }
                 }
-            }
 
-            _ => {}
+                rdev::EventType::KeyRelease(key) => {
+                    update_modifier_state(&key, false, &cb_ctrl, &cb_shift, &cb_alt, &cb_win);
+                    if key == trigger_key && cb_trigger.load(Ordering::SeqCst) {
+                        cb_trigger.store(false, Ordering::SeqCst);  // mark as released
+                        // Log immediately to catch crash point
+                        info!("🛑 Key released, stopping recording...");
+
+                        cb_is_rec.store(false, Ordering::SeqCst);
+                        tray.set_recording(false);
+                        ind.set_visible(false);
+
+                        // Safely stop recording and get audio buffer
+                        let audio = {
+                            let mut guard = match cb_rec.lock() {
+                                Ok(g) => g,
+                                Err(e) => {
+                                    error!("❌ Mutex poisoned on recording channel: {e}");
+                                    return;
+                                }
+                            };
+                            match guard.take() {
+                                Some(r) => {
+                                    info!("🛑 Stopping audio stream...");
+                                    r.stop()
+                                }
+                                None => {
+                                    warn!("⚠  Recording was None — already taken?");
+                                    Vec::new()
+                                }
+                            }
+                        };
+
+                        if audio.is_empty() {
+                            warn!("⚠  No audio captured — recording too short.");
+                            return;
+                        }
+
+                        info!(
+                            "🛑 Captured {:.1}s — transcribing…",
+                            audio.len() as f64 / 16_000.0
+                        );
+
+                        if let Err(e) = tx.send(audio) {
+                            error!("❌ Failed to send audio to transcription thread: {e}");
+                        }
+                    }
+                }
+
+                _ => {}
+            }
+        });
+        
+        *listen_result_clone.lock().unwrap() = result;
+        
+        if let Err(e) = &*listen_result_clone.lock().unwrap() {
+            error!("❌ rdev::listen() error: {:?}", e);
+        } else {
+            info!("✅ rdev::listen() registered successfully");
+            eprintln!("✅ Hotkey registered! Press {} to start recording.", hotkey_for_closure);
         }
-    }) {
+    });
+    
+    // Wait a bit for rdev to initialize
+    std::thread::sleep(std::time::Duration::from_millis(500));
+    
+    // Check if rdev failed to start
+    if let Err(e) = &*listen_result.lock().unwrap() {
         anyhow::bail!(
             "Failed to register global hotkey ({e:?}).\n\
-             Is another push-to-talk instance running? On some systems, \
-             running as Administrator may be required for global hotkeys."
+             Is another push-to-talk instance running? On macOS, ensure you have granted:\n\
+             - System Settings → Privacy & Security → Accessibility\n\
+             - System Settings → Privacy & Security → Input Monitoring"
         );
     }
+    
+    info!("✅ Hotkey listener started");
+    eprintln!("✅ Hotkey registered! Press {} to start recording.", hotkey_str);
+    eprintln!("💡 Tip: Press Ctrl+C to exit");
 
-    Ok(())
+    // Keep the main thread alive
+    loop {
+        std::thread::sleep(std::time::Duration::from_secs(60));
+    }
 }
 
 // ---- helpers -------------------------------------------------------------
@@ -596,4 +701,16 @@ fn expand_env_vars(raw: &str) -> String {
     }
 
     result
+}
+
+/// Check Accessibility permissions on macOS
+#[cfg(target_os = "macos")]
+fn check_accessibility_permissions() -> bool {
+    #[link(name = "ApplicationServices", kind = "framework")]
+    unsafe extern "C" {
+        #[link_name = "AXIsProcessTrusted"]
+        fn ax_is_process_trusted() -> bool;
+    }
+
+    unsafe { ax_is_process_trusted() }
 }
