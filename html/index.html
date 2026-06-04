@@ -351,6 +351,7 @@
             document.getElementById('serviceStatus').value = status.is_service_running ? 'Running' : 'Stopped';
             document.getElementById('currentHotkey').value = status.hotkey;
             document.getElementById('currentLanguage').value = status.language || 'auto';
+            document.getElementById('lastTranscription').value = status.last_transcription || '—';
         }
 
         function fillConfigForm(config) {

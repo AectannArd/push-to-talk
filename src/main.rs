@@ -18,6 +18,7 @@ pub struct AppState {
     pub is_running: Arc<Mutex<bool>>,
     pub config: Arc<Mutex<config::Config>>,
     pub is_recording: Arc<AtomicBool>,
+    pub last_transcription: Arc<Mutex<Option<String>>>,
 }
 
 /// Device info for frontend dropdown
@@ -36,6 +37,7 @@ impl AppState {
             is_running: Arc::new(Mutex::new(false)),
             config: Arc::new(Mutex::new(config::Config::default())),
             is_recording: Arc::new(AtomicBool::new(false)),
+            last_transcription: Arc::new(Mutex::new(None)),
         }
     }
 }
@@ -56,6 +58,7 @@ pub struct StatusDto {
     pub is_service_running: bool,
     pub hotkey: String,
     pub language: Option<String>,
+    pub last_transcription: Option<String>,
 }
 
 #[tauri::command]
@@ -64,12 +67,14 @@ fn get_status() -> StatusDto {
         let config = state.config.lock().unwrap();
         let is_running = *state.is_running.lock().unwrap();
         let is_recording = state.is_recording.load(Ordering::SeqCst);
+        let last_transcription = state.last_transcription.lock().unwrap().clone();
 
         StatusDto {
             is_recording,
             is_service_running: is_running,
             hotkey: config.hotkey.clone(),
             language: config.language.clone(),
+            last_transcription,
         }
     } else {
         StatusDto {
@@ -77,6 +82,7 @@ fn get_status() -> StatusDto {
             is_service_running: false,
             hotkey: String::new(),
             language: None,
+            last_transcription: None,
         }
     }
 }
@@ -89,8 +95,9 @@ fn start_service() -> Result<(), String> {
             return Err("Service already running".to_string());
         }
         let config = state.config.lock().unwrap().clone();
-        
-        match voice_service::VoiceServiceHandle::start(config) {
+        let last_transcription = state.last_transcription.clone();
+
+        match voice_service::VoiceServiceHandle::start(config, last_transcription) {
             Ok(handle) => {
                 *state.voice_service.lock().unwrap() = Some(handle);
                 *running = true;

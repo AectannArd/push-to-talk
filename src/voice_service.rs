@@ -19,13 +19,14 @@ pub struct VoiceServiceHandle {
 
 pub struct VoiceServiceInner {
     pub is_recording: Arc<AtomicBool>,
+    pub last_transcription: Arc<Mutex<Option<String>>>,
     recording: Arc<Mutex<Option<Recording>>>,
     tx: mpsc::Sender<Vec<i16>>,
     rec: Arc<crate::recorder::Recorder>,
 }
 
 impl VoiceServiceHandle {
-    pub fn start(config: Config) -> Result<Self, anyhow::Error> {
+    pub fn start(config: Config, last_transcription: Arc<Mutex<Option<String>>>) -> Result<Self, anyhow::Error> {
         let stop_flag = Arc::new(AtomicBool::new(false));
         let is_recording = Arc::new(AtomicBool::new(false));
 
@@ -55,6 +56,7 @@ impl VoiceServiceHandle {
 
         let state = Arc::new(VoiceServiceInner {
             is_recording: is_recording.clone(),
+            last_transcription,
             recording,
             tx,
             rec,
@@ -154,6 +156,7 @@ fn run_service_loop(
 ) {
     // Transcription thread
     let tr_clone = tr.clone();
+    let last_transcription = state.last_transcription.clone();
     let _tx_clone = state.tx.clone();
     let _transcribe_thread = thread::spawn(move || {
         for audio in rx {
@@ -163,6 +166,8 @@ fn run_service_loop(
                 }
                 Ok(text) => {
                     info!("📝 \"{}\"", text);
+                    // Update last transcription
+                    *last_transcription.lock().unwrap() = Some(text.clone());
                     copy_to_clipboard(&text);
                     info!("✅ Text copied to clipboard");
                     thread::sleep(Duration::from_millis(100)); // Give clipboard time to settle
