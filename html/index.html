@@ -138,9 +138,11 @@
                     <div class="hint">Use "auto" for automatic detection, or specify: ru, en, de, etc.</div>
                 </div>
                 <div class="form-group">
-                    <label for="deviceId">Device ID (optional)</label>
-                    <input type="text" id="deviceId" name="deviceId" placeholder="Leave empty for default">
-                    <div class="hint">Audio device system ID</div>
+                    <label for="deviceSelect">Audio Input Device</label>
+                    <select id="deviceSelect" name="deviceSelect">
+                        <option value="">Use default device</option>
+                    </select>
+                    <div class="hint">Select an audio input device</div>
                 </div>
                 <div class="section-title">🧠 Whisper Model</div>
                 <div class="form-group">
@@ -190,6 +192,90 @@
         const { invoke } = window.__TAURI__.core;
         const { getCurrentWindow } = window.__TAURI__.window;
         let isRecording = false, isServiceRunning = false;
+        let devicePollInterval = null;
+
+        // Load and populate device dropdown
+        async function loadDevices() {
+            try {
+                const devices = await invoke('list_audio_devices');
+                const select = document.getElementById('deviceSelect');
+                const currentValue = select.value;
+                
+                // Clear existing options except the default
+                select.innerHTML = '<option value="">Use default device</option>';
+                
+                devices.forEach(device => {
+                    const option = document.createElement('option');
+                    option.value = device.id;
+                    option.textContent = device.name + (device.is_default ? ' (default)' : '');
+                    if (device.config) {
+                        option.textContent += ' - ' + device.config;
+                    }
+                    select.appendChild(option);
+                });
+                
+                // Restore selection if still available
+                if (currentValue && devices.some(d => d.id === currentValue)) {
+                    select.value = currentValue;
+                }
+            } catch (error) {
+                console.error('Failed to load devices:', error);
+            }
+        }
+
+        // Start polling for device changes
+        function startDeviceMonitoring() {
+            // Check every 3 seconds for device changes
+            devicePollInterval = setInterval(async () => {
+                const currentDeviceEl = document.getElementById('deviceSelect');
+                const currentDeviceId = currentDeviceEl.value;
+                
+                if (currentDeviceId) {
+                    // Check if current device is still available
+                    try {
+                        const devices = await invoke('list_audio_devices');
+                        const deviceStillExists = devices.some(d => d.id === currentDeviceId);
+                        
+                        if (!deviceStillExists) {
+                            // Current device was disconnected
+                            showStatus('Current device disconnected, switching to default', 'error');
+                            currentDeviceEl.value = '';
+                            // Auto-save the config with default device
+                            await saveConfigSilently();
+                        }
+                    } catch (error) {
+                        console.error('Failed to check devices:', error);
+                    }
+                }
+            }, 3000);
+        }
+
+        // Save config without showing success message (for auto-switch)
+        async function saveConfigSilently() {
+            const config = buildConfigFromForm();
+            try {
+                await invoke('save_config', { config });
+            } catch (error) {
+                console.error('Failed to save config:', error);
+            }
+        }
+
+        // Build config object from form
+        function buildConfigFromForm() {
+            const deviceSelect = document.getElementById('deviceSelect');
+            return {
+                hotkey: document.getElementById('hotkey').value.trim(),
+                language: document.getElementById('language').value.trim() || null,
+                device_id: deviceSelect.value || null,
+                device_name: deviceSelect.selectedOptions[0]?.textContent?.replace(' (default)', '').split(' - ')[0] || null,
+                model: document.getElementById('model').value.trim() || null,
+                model_search_dirs: document.getElementById('modelSearchDirs').value.split(',').map(s => s.trim()).filter(s => s.length > 0),
+                log_dir: document.getElementById('logDir').value.trim() || 'logs',
+                log_level: document.getElementById('logLevel').value,
+                log_format: document.getElementById('logFormat').value,
+                log_retention_hours: parseInt(document.getElementById('logRetention').value) || 24
+            };
+        }
 
         document.querySelectorAll('.tab').forEach(tab => {
             tab.addEventListener('click', () => {
@@ -206,6 +292,11 @@
                 updateStatusUI(status);
                 const config = await invoke('get_config');
                 fillConfigForm(config);
+                await loadDevices();
+                // Start device monitoring on first load
+                if (!devicePollInterval) {
+                    startDeviceMonitoring();
+                }
             } catch (error) {
                 showStatus('Failed to load state: ' + error, 'error');
             }
@@ -244,7 +335,17 @@
         function fillConfigForm(config) {
             document.getElementById('hotkey').value = config.hotkey || '';
             document.getElementById('language').value = config.language || '';
-            document.getElementById('deviceId').value = config.device_id || '';
+            // Device selection will be handled by loadDevices
+            // The device_id is stored in config but we use the dropdown
+            if (config.device_id) {
+                // Wait for devices to load, then set the value
+                setTimeout(() => {
+                    const select = document.getElementById('deviceSelect');
+                    if (select.querySelector(`option[value="${config.device_id}"]`)) {
+                        select.value = config.device_id;
+                    }
+                }, 100);
+            }
             document.getElementById('model').value = config.model || '';
             document.getElementById('modelSearchDirs').value = (config.model_search_dirs || []).join(', ');
             document.getElementById('logDir').value = config.log_dir || '';
@@ -273,17 +374,7 @@
 
         document.getElementById('configForm').addEventListener('submit', async (e) => {
             e.preventDefault();
-            const config = {
-                hotkey: document.getElementById('hotkey').value.trim(),
-                language: document.getElementById('language').value.trim() || null,
-                device_id: document.getElementById('deviceId').value.trim() || null,
-                model: document.getElementById('model').value.trim() || null,
-                model_search_dirs: document.getElementById('modelSearchDirs').value.split(',').map(s => s.trim()).filter(s => s.length > 0),
-                log_dir: document.getElementById('logDir').value.trim() || 'logs',
-                log_level: document.getElementById('logLevel').value,
-                log_format: document.getElementById('logFormat').value,
-                log_retention_hours: parseInt(document.getElementById('logRetention').value) || 24
-            };
+            const config = buildConfigFromForm();
             try {
                 await invoke('save_config', { config });
                 showStatus('Configuration saved! Restart service for changes.', 'success');

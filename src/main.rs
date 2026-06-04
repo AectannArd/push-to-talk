@@ -20,6 +20,15 @@ pub struct AppState {
     pub is_recording: Arc<AtomicBool>,
 }
 
+/// Device info for frontend dropdown
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DeviceDto {
+    pub id: String,
+    pub name: String,
+    pub config: String,
+    pub is_default: bool,
+}
+
 impl AppState {
     pub fn new() -> Self {
         Self {
@@ -141,6 +150,62 @@ fn trigger_recording() -> Result<(), String> {
     }
 }
 
+#[tauri::command]
+fn list_audio_devices() -> Result<Vec<DeviceDto>, String> {
+    match crate::recorder::list_input_devices() {
+        Ok(devices) => Ok(devices
+            .into_iter()
+            .map(|d| DeviceDto {
+                id: d.id,
+                name: d.name,
+                config: d.config,
+                is_default: d.is_default,
+            })
+            .collect()),
+        Err(e) => Err(format!("Failed to list devices: {}", e)),
+    }
+}
+
+#[tauri::command]
+fn get_current_device() -> Result<Option<DeviceDto>, String> {
+    if let Some(state) = get_global_state() {
+        let config = state.config.lock().unwrap();
+        if let Some(ref device_id) = config.device_id {
+            // Try to find the device in the current list
+            match crate::recorder::list_input_devices() {
+                Ok(devices) => {
+                    if let Some(device) = devices.into_iter().find(|d| &d.id == device_id) {
+                        return Ok(Some(DeviceDto {
+                            id: device.id,
+                            name: device.name,
+                            config: device.config,
+                            is_default: device.is_default,
+                        }));
+                    }
+                    // Device not found - return the stored config anyway
+                    return Ok(Some(DeviceDto {
+                        id: device_id.clone(),
+                        name: config.device_name.clone().unwrap_or_default(),
+                        config: String::new(),
+                        is_default: false,
+                    }));
+                }
+                Err(_) => {
+                    return Ok(Some(DeviceDto {
+                        id: device_id.clone(),
+                        name: config.device_name.clone().unwrap_or_default(),
+                        config: String::new(),
+                        is_default: false,
+                    }));
+                }
+            }
+        }
+        Ok(None)
+    } else {
+        Err("State not initialized".to_string())
+    }
+}
+
 fn toggle_recording_inner(state: &AppState) {
     if !*state.is_running.lock().unwrap() {
         return;
@@ -182,6 +247,8 @@ fn main() {
             get_config,
             save_config,
             trigger_recording,
+            list_audio_devices,
+            get_current_device,
         ])
         .setup(move |_app| {
             // Window event handler - hide instead of close
