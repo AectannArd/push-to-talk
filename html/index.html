@@ -180,9 +180,7 @@
                 <div class="form-group">
                     <label for="logRetention">Log Retention (hours)</label>
                     <input type="number" id="logRetention" name="logRetention" min="1" max="720" placeholder="24">
-                </div>
-                <div class="control-buttons">
-                    <button type="submit" class="btn btn-primary">💾 Save Configuration</button>
+                    <div class="hint">Changes are saved automatically</div>
                 </div>
             </form>
         </div>
@@ -277,7 +275,7 @@
             };
         }
 
-        // Auto-save config on field changes (debounced)
+        // Auto-save config on field changes (debounced, silent)
         let autoSaveTimeout = null;
         function autoSaveConfig() {
             if (autoSaveTimeout) clearTimeout(autoSaveTimeout);
@@ -285,7 +283,6 @@
                 const config = buildConfigFromForm();
                 try {
                     await invoke('save_config', { config });
-                    showStatus('Configuration saved', 'success');
                 } catch (error) {
                     console.error('Auto-save failed:', error);
                 }
@@ -398,11 +395,7 @@
             await getCurrentWindow().hide();
         });
 
-        document.getElementById('configForm').addEventListener('submit', (e) => {
-            e.preventDefault();
-            // Trigger immediate save on button click
-            autoSaveConfig();
-        });
+        // No save button needed - auto-save handles everything
 
         function showStatus(message, type) {
             const el = document.getElementById('statusMessage');
