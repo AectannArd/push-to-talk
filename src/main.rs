@@ -250,10 +250,11 @@ fn init_logging(config: &config::Config) {
         eprintln!("Failed to create log directory: {}", e);
     }
 
+    // Create minutely rolling file appender
+    // Filename format: push-to-talk.YYYY-MM-DD-HH-MM
     let file_appender = RollingFileAppender::builder()
-        .rotation(Rotation::DAILY)
+        .rotation(Rotation::MINUTELY)
         .filename_prefix("push-to-talk")
-        .filename_suffix(config.log_format.clone())
         .build(log_dir)
         .expect("Failed to create file appender");
 
@@ -268,34 +269,65 @@ fn init_logging(config: &config::Config) {
         .with_file(false)
         .with_line_number(false);
 
-    // File layer with dynamic formatting
-    let registry = tracing_subscriber::registry()
-        .with(console_layer)
-        .with(file_filter);
+    // File layer
+    let file_layer = fmt::layer()
+        .with_writer(file_appender)
+        .with_target(false)
+        .with_thread_ids(false)
+        .with_file(false)
+        .with_line_number(false);
 
-    match config.log_format.as_str() {
-        "json" => {
-            let file_layer = fmt::layer()
-                .with_writer(file_appender)
-                .json()
-                .with_target(false)
-                .with_thread_ids(false)
-                .with_file(false)
-                .with_line_number(false);
-            registry.with(file_layer).init();
-        }
-        _ => {
-            let file_layer = fmt::layer()
-                .with_writer(file_appender)
-                .with_target(false)
-                .with_thread_ids(false)
-                .with_file(false)
-                .with_line_number(false);
-            registry.with(file_layer).init();
-        }
-    }
+    tracing_subscriber::registry()
+        .with(console_layer)
+        .with(file_layer.with_filter(file_filter))
+        .init();
 
     tracing::info!("📝 Logging initialized to {}", log_dir.display());
+
+    // Start log cleanup thread
+    start_log_cleanup(log_dir.to_path_buf(), config.log_retention_hours);
+}
+
+fn start_log_cleanup(log_dir: std::path::PathBuf, retention_hours: u64) {
+    std::thread::spawn(move || {
+        // Run cleanup every hour
+        loop {
+            std::thread::sleep(std::time::Duration::from_secs(3600));
+            cleanup_old_logs(&log_dir, retention_hours);
+        }
+    });
+}
+
+fn cleanup_old_logs(log_dir: &std::path::Path, retention_hours: u64) {
+    use std::fs;
+    use std::time::{SystemTime, UNIX_EPOCH};
+
+    let now = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap()
+        .as_secs();
+
+    let retention_secs = retention_hours * 3600;
+
+    if let Ok(entries) = fs::read_dir(log_dir) {
+        for entry in entries.flatten() {
+            if let Ok(metadata) = entry.metadata() {
+                if metadata.is_file() {
+                    if let Ok(modified) = metadata.modified() {
+                        let modified_secs = modified
+                            .duration_since(UNIX_EPOCH)
+                            .unwrap_or_default()
+                            .as_secs();
+
+                        if now - modified_secs > retention_secs {
+                            let _ = fs::remove_file(entry.path());
+                            tracing::info!("🗑️ Cleaned up old log: {:?}", entry.path());
+                        }
+                    }
+                }
+            }
+        }
+    }
 }
 
 fn toggle_recording_inner(state: &AppState) {
