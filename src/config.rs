@@ -10,7 +10,7 @@ pub fn default_path() -> PathBuf {
     home.join(".push-to-talk").join("config.toml")
 }
 
-fn default_model_dirs() -> Vec<String> {
+pub fn default_model_dirs() -> Vec<String> {
     // Default: ~/.push-to-talk/models/ (next to config.toml) + current dir
     let home = std::env::var("USERPROFILE")
         .or_else(|_| std::env::var("HOME"))
@@ -44,7 +44,7 @@ fn default_log_format() -> String {
     "text".into()
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Config {
     /// Audio device system ID (e.g., "coreaudio:device_123"). None = prompt at startup.
     #[serde(default, skip_serializing_if = "Option::is_none")]

@@ -54,23 +54,26 @@ impl Recorder {
 
         // Device selection:
         // 1. Config device_id (system ID) → use it (no output)
-        // 2. None                         → prompt interactively, persist system ID
+        // 2. None                         → use default device (GUI mode, no prompt)
         let (device, newly_selected) = if let Some(id) = device_id {
             match pick_device_by_id(&host, id) {
                 Some(d) => (d, None),
                 None => {
-                    tracing::warn!("Configured device '{id}' not found, falling back to interactive selection");
-                    // Fall through to interactive selection
-                    let (id, name) = select_device_interactive()?;
-                    let device = pick_device_by_id(&host, &id)
-                        .context("Selected device not found")?;
+                    tracing::warn!("Configured device '{id}' not found, falling back to default device");
+                    // Fall back to default device
+                    let device = host.default_input_device()
+                        .context("No input device available")?;
+                    let id = device.id().map(|id| id.to_string()).unwrap_or_default();
+                    let name = device.description().map(|d| d.name().to_string()).unwrap_or_default();
                     (device, Some((id, name)))
                 }
             }
         } else {
-            let (id, name) = select_device_interactive()?;
-            let device = pick_device_by_id(&host, &id)
-                .context("Selected device not found")?;
+            // Use default device without prompting (GUI mode)
+            let device = host.default_input_device()
+                .context("No input device available")?;
+            let id = device.id().map(|id| id.to_string()).unwrap_or_default();
+            let name = device.description().map(|d| d.name().to_string()).unwrap_or_default();
             (device, Some((id, name)))
         };
 

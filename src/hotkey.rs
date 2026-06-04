@@ -7,6 +7,24 @@ pub struct ParsedHotkey {
     pub needs_win: bool,
 }
 
+/// Current modifier state
+#[derive(Clone, Default)]
+pub struct ModifierState {
+    pub ctrl: bool,
+    pub shift: bool,
+    pub alt: bool,
+    pub meta: bool,
+}
+
+impl ModifierState {
+    pub fn matches(&self, hotkey: &ParsedHotkey) -> bool {
+        (hotkey.needs_ctrl == self.ctrl)
+            && (hotkey.needs_shift == self.shift)
+            && (hotkey.needs_alt == self.alt)
+            && (hotkey.needs_win == self.meta)
+    }
+}
+
 /// Parse a hotkey string like `"Ctrl+Shift+T"` into its parts.
 ///
 /// Supported modifiers: `Ctrl`, `Shift`, `Alt`, `Win`.

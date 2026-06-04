@@ -134,6 +134,35 @@ defaults read com.apple.universalaccessAssistiveApplications 2>/dev/null | grep 
 | AppleScript errors | Missing Automation | Grant Automation → System Events |
 | Permissions reset after update | macOS security | Re-grant all permissions |
 
+### GUI Configuration (macOS)
+
+A Tauri-based GUI is embedded in the main binary for configuration on macOS.
+
+**Opening the GUI:**
+
+```bash
+# Open the configuration window
+push-to-talk --gui
+```
+
+**Features:**
+- Modern gradient UI design
+- All configuration fields editable
+- Save configuration with validation
+- Built with Tauri 2.x + HTML/CSS/JavaScript
+
+**Note:** First build downloads WebKit and can take 10-20 minutes.
+
+### Menu Bar Tray (macOS)
+
+The application includes a menu bar tray icon on macOS for quick access.
+
+**Features:**
+- 🎤 Microphone icon in menu bar
+- Status indicator (Idle / ● Recording)
+- Configure... menu item (opens Tauri GUI)
+- Quit application menu item
+
 ### Build Commands
 
 ```bash
