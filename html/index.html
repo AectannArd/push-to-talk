@@ -145,14 +145,28 @@
                 </div>
                 <div class="section-title">🧠 Whisper Model</div>
                 <div class="form-group">
-                    <label for="model">Model Path (optional)</label>
-                    <input type="text" id="model" name="model" placeholder="Path to ggml model file">
-                    <div class="hint">Full path to the Whisper model file</div>
-                </div>
-                <div class="form-group">
                     <label for="modelSearchDirs">Model Search Directories</label>
                     <input type="text" id="modelSearchDirs" name="modelSearchDirs" placeholder="~/.push-to-talk/models">
                     <div class="hint">Comma-separated list of directories</div>
+                </div>
+                <div class="form-group">
+                    <label>Available Models</label>
+                    <div id="modelList" style="border: 1px solid #e0e0e0; border-radius: 8px; padding: 12px; background: #f8f9fa; min-height: 60px;">
+                        <p style="color: #888; margin: 0;">Click "Scan for Models" to find available models</p>
+                    </div>
+                    <button class="btn btn-secondary" id="scanModelsBtn" style="margin-top: 8px; width: 100%;">🔍 Scan for Models</button>
+                </div>
+                <div class="form-group">
+                    <label>Download Model</label>
+                    <div style="display: flex; gap: 8px;">
+                        <select id="modelToDownload" style="flex: 1;">
+                            <option value="ggml-base.bin">ggml-base.bin (74 MB)</option>
+                            <option value="ggml-small.bin">ggml-small.bin (244 MB)</option>
+                            <option value="ggml-medium.bin">ggml-medium.bin (769 MB)</option>
+                        </select>
+                        <button class="btn btn-primary" id="downloadModelBtn" style="white-space: nowrap;">⬇️ Download</button>
+                    </div>
+                    <div class="hint">Downloads from Hugging Face to ~/.push-to-talk/models/</div>
                 </div>
                 <div class="section-title">📝 Logging</div>
                 <div class="form-group">
@@ -264,7 +278,7 @@
                 language: document.getElementById('language').value.trim() || null,
                 device_id: deviceSelect.value || null,
                 device_name: deviceSelect.selectedOptions[0]?.textContent?.replace(' (default)', '').split(' - ')[0] || null,
-                model: document.getElementById('model').value.trim() || null,
+                model: null,
                 model_search_dirs: document.getElementById('modelSearchDirs').value.split(',').map(s => s.trim()).filter(s => s.length > 0),
                 log_dir: document.getElementById('logDir').value.trim() || 'logs',
                 log_level: document.getElementById('logLevel').value,
@@ -368,7 +382,6 @@
                     }
                 }, 100);
             }
-            document.getElementById('model').value = config.model || '';
             document.getElementById('modelSearchDirs').value = (config.model_search_dirs || []).join(', ');
             document.getElementById('logDir').value = config.log_dir || '';
             document.getElementById('logLevel').value = config.log_level || 'info';
@@ -411,6 +424,54 @@
                         showStatus('Failed: ' + error, 'error');
                     }
                 }
+            }
+        });
+
+        // Scan for models button
+        document.getElementById('scanModelsBtn').addEventListener('click', async () => {
+            const modelListEl = document.getElementById('modelList');
+            modelListEl.innerHTML = '<p style="color: #888;">Scanning...</p>';
+            
+            try {
+                const config = buildConfigFromForm();
+                const models = await invoke('scan_models', { modelSearchDirs: config.model_search_dirs });
+                
+                if (models.length === 0) {
+                    modelListEl.innerHTML = '<p style="color: #888;">No models found. Download a model or update search directories.</p>';
+                } else {
+                    modelListEl.innerHTML = models.map(m => 
+                        `<div style="padding: 8px; margin: 4px 0; background: white; border-radius: 4px; display: flex; justify-content: space-between; align-items: center;">
+                            <span style="font-family: monospace; font-size: 13px;">${m.filename}</span>
+                            <span style="color: #888; font-size: 12px;">${m.size}</span>
+                        </div>`
+                    ).join('');
+                }
+            } catch (error) {
+                modelListEl.innerHTML = `<p style="color: #ff4444;">Error: ${error}</p>`;
+            }
+        });
+
+        // Download model button
+        document.getElementById('downloadModelBtn').addEventListener('click', async () => {
+            const select = document.getElementById('modelToDownload');
+            const modelName = select.value;
+            const downloadBtn = document.getElementById('downloadModelBtn');
+            
+            downloadBtn.disabled = true;
+            downloadBtn.textContent = '⏳ Downloading...';
+            
+            try {
+                const config = buildConfigFromForm();
+                const targetDir = config.model_search_dirs[0] || '~/.push-to-talk/models';
+                await invoke('download_model', { modelName, targetDir });
+                showStatus(`Model ${modelName} downloaded successfully!`, 'success');
+                // Auto-scan after download
+                document.getElementById('scanModelsBtn').click();
+            } catch (error) {
+                showStatus('Download failed: ' + error, 'error');
+            } finally {
+                downloadBtn.disabled = false;
+                downloadBtn.textContent = '⬇️ Download';
             }
         });
 

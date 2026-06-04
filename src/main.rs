@@ -9,6 +9,8 @@ use serde::{Deserialize, Serialize};
 use std::sync::{Arc, Mutex, atomic::{AtomicBool, Ordering}};
 use tauri::Manager;
 use once_cell::sync::OnceCell;
+use std::path::Path;
+use std::fs;
 
 // Global state accessible anywhere
 static APP_STATE: OnceCell<Arc<AppState>> = OnceCell::new();
@@ -28,6 +30,13 @@ pub struct DeviceDto {
     pub name: String,
     pub config: String,
     pub is_default: bool,
+}
+
+/// Model info for frontend list
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ModelDto {
+    pub filename: String,
+    pub size: String,
 }
 
 impl AppState {
@@ -247,6 +256,119 @@ fn get_current_device() -> Result<Option<DeviceDto>, String> {
     }
 }
 
+#[tauri::command]
+fn scan_models(model_search_dirs: Vec<String>) -> Result<Vec<ModelDto>, String> {
+    let mut models = Vec::new();
+    
+    for dir_str in model_search_dirs {
+        let dir = shellexpand::tilde(&dir_str).to_string();
+        let dir_path = Path::new(&dir);
+        
+        if !dir_path.exists() {
+            continue;
+        }
+        
+        let entries = fs::read_dir(dir_path)
+            .map_err(|e| format!("Failed to read directory {}: {}", dir, e))?;
+        
+        for entry in entries.flatten() {
+            let path = entry.path();
+            if path.is_file() {
+                if let Some(name) = path.file_name().and_then(|n| n.to_str()) {
+                    if name.starts_with("ggml-") && name.ends_with(".bin") {
+                        let metadata = fs::metadata(&path)
+                            .map_err(|e| format!("Failed to get metadata: {}", e))?;
+                        let size = format_size(metadata.len());
+                        
+                        models.push(ModelDto {
+                            filename: name.to_string(),
+                            size,
+                        });
+                    }
+                }
+            }
+        }
+    }
+    
+    // Remove duplicates and sort
+    models.sort_by(|a, b| a.filename.cmp(&b.filename));
+    models.dedup_by(|a, b| a.filename == b.filename);
+    
+    Ok(models)
+}
+
+#[tauri::command]
+async fn download_model(model_name: String, target_dir: String) -> Result<String, String> {
+    use reqwest::Client;
+    use tokio::io::AsyncWriteExt;
+    use futures_util::StreamExt;
+    
+    let huggingface_url = format!(
+        "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/{}",
+        model_name
+    );
+    
+    let target_path = shellexpand::tilde(&target_dir).to_string();
+    let target_path = Path::new(&target_path).join(&model_name);
+    
+    // Create directory if it doesn't exist
+    if let Some(parent) = target_path.parent() {
+        fs::create_dir_all(parent)
+            .map_err(|e| format!("Failed to create directory: {}", e))?;
+    }
+    
+    let client = Client::new();
+    let response = client
+        .get(&huggingface_url)
+        .send()
+        .await
+        .map_err(|e| format!("Failed to start download: {}", e))?;
+    
+    if !response.status().is_success() {
+        return Err(format!("Download failed: HTTP {}", response.status()));
+    }
+    
+    let total_size = response
+        .content_length()
+        .ok_or("Content-Length not available")?;
+    
+    let mut file = tokio::fs::File::create(&target_path)
+        .await
+        .map_err(|e| format!("Failed to create file: {}", e))?;
+    
+    let mut downloaded: u64 = 0;
+    let mut stream = response.bytes_stream();
+    
+    while let Some(chunk) = stream.next().await {
+        let chunk = chunk.map_err(|e| format!("Download error: {}", e))?;
+        file.write_all(&chunk)
+            .await
+            .map_err(|e| format!("Write error: {}", e))?;
+        
+        downloaded += chunk.len() as u64;
+        let progress = (downloaded as f64 / total_size as f64 * 100.0) as u32;
+        tracing::info!("⬇️ Downloading {}: {}%", model_name, progress);
+    }
+    
+    Ok(format!("Downloaded {} to {}", model_name, target_path.display()))
+}
+
+fn format_size(bytes: u64) -> String {
+    const KB: u64 = 1024;
+    const MB: u64 = KB * 1024;
+    const GB: u64 = MB * 1024;
+    
+    if bytes >= GB {
+        format!("{:.1} GB", bytes as f64 / GB as f64)
+    } else if bytes >= MB {
+        format!("{:.1} MB", bytes as f64 / MB as f64)
+    } else if bytes >= KB {
+        format!("{:.1} KB", bytes as f64 / KB as f64)
+    } else {
+        format!("{} B", bytes)
+    }
+}
+
 fn init_logging(config: &config::Config) {
     use std::fs;
     use tracing_appender::rolling::{RollingFileAppender, Rotation};
@@ -391,6 +513,8 @@ fn main() {
             trigger_recording,
             list_audio_devices,
             get_current_device,
+            scan_models,
+            download_model,
         ])
         .setup(move |app| {
             // Prevent app from exiting when window is closed (tray app behavior)
