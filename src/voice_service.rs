@@ -164,17 +164,23 @@ fn run_service_loop(
                 Ok(text) => {
                     info!("📝 \"{}\"", text);
                     copy_to_clipboard(&text);
+                    info!("✅ Text copied to clipboard");
                     paste_from_clipboard();
+                    info!("✅ Paste completed");
                 }
                 Err(e) => error!("❌ Transcription error: {}", e),
             }
         }
+        info!("👋 Transcription thread exiting (channel closed)");
     });
+
+    info!("✅ Voice service loop started");
 
     // Keep service alive
     loop {
         thread::sleep(std::time::Duration::from_secs(1));
         if stop_flag.load(Ordering::Relaxed) {
+            info!("🛑 Stop flag received, exiting voice service loop");
             break;
         }
     }

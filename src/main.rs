@@ -353,6 +353,12 @@ fn toggle_recording_inner(state: &AppState) {
 }
 
 fn main() {
+    // Install panic hook to log panics before exiting
+    std::panic::set_hook(Box::new(|panic_info| {
+        tracing::error!("🚨 PANIC: {}", panic_info);
+        eprintln!("🚨 PANIC: {}", panic_info);
+    }));
+
     let config_path = config::default_path();
     let cfg = config::Config::load(&config_path);
 
@@ -380,6 +386,22 @@ fn main() {
             get_current_device,
         ])
         .setup(move |app| {
+            // Prevent app from exiting when window is closed (tray app behavior)
+            #[cfg(target_os = "macos")]
+            {
+                if let Some(window) = app.get_webview_window("main") {
+                    let window_clone = window.clone();
+                    window.on_window_event(move |event| {
+                        if let tauri::WindowEvent::CloseRequested { api, .. } = event {
+                            // Prevent window close, hide instead
+                            api.prevent_close();
+                            let _ = window_clone.hide();
+                            tracing::info!("🪟 Window hidden (close prevented for tray app)");
+                        }
+                    });
+                }
+            }
+
             // Register global hotkey
             let config = app_state_arc.config.lock().unwrap();
             let hotkey = config.hotkey.clone();
