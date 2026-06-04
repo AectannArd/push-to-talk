@@ -277,14 +277,40 @@
             };
         }
 
+        // Auto-save config on field changes (debounced)
+        let autoSaveTimeout = null;
+        function autoSaveConfig() {
+            if (autoSaveTimeout) clearTimeout(autoSaveTimeout);
+            autoSaveTimeout = setTimeout(async () => {
+                const config = buildConfigFromForm();
+                try {
+                    await invoke('save_config', { config });
+                    showStatus('Configuration saved', 'success');
+                } catch (error) {
+                    console.error('Auto-save failed:', error);
+                }
+            }, 500);
+        }
+
         document.querySelectorAll('.tab').forEach(tab => {
             tab.addEventListener('click', () => {
                 document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
                 document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
                 tab.classList.add('active');
-                document.getElementById(tab.dataset.tab + 'Tab').classList.add('active');
+                document.getElementById(tab.dataset.tab).classList.add('active');
             });
         });
+
+        // Auto-save on form field changes
+        document.getElementById('hotkey').addEventListener('input', autoSaveConfig);
+        document.getElementById('language').addEventListener('input', autoSaveConfig);
+        document.getElementById('deviceSelect').addEventListener('change', autoSaveConfig);
+        document.getElementById('model').addEventListener('input', autoSaveConfig);
+        document.getElementById('modelSearchDirs').addEventListener('input', autoSaveConfig);
+        document.getElementById('logDir').addEventListener('input', autoSaveConfig);
+        document.getElementById('logLevel').addEventListener('change', autoSaveConfig);
+        document.getElementById('logFormat').addEventListener('change', autoSaveConfig);
+        document.getElementById('logRetention').addEventListener('input', autoSaveConfig);
 
         async function loadState() {
             try {
@@ -372,16 +398,10 @@
             await getCurrentWindow().hide();
         });
 
-        document.getElementById('configForm').addEventListener('submit', async (e) => {
+        document.getElementById('configForm').addEventListener('submit', (e) => {
             e.preventDefault();
-            const config = buildConfigFromForm();
-            try {
-                await invoke('save_config', { config });
-                showStatus('Configuration saved! Restart service for changes.', 'success');
-                await loadState();
-            } catch (error) {
-                showStatus('Failed to save: ' + error, 'error');
-            }
+            // Trigger immediate save on button click
+            autoSaveConfig();
         });
 
         function showStatus(message, type) {
