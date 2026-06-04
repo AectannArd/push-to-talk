@@ -129,11 +129,45 @@ fn get_config() -> config::Config {
 }
 
 #[tauri::command]
-fn save_config(cfg: config::Config) -> Result<(), String> {
+fn save_config(app: tauri::AppHandle, cfg: config::Config) -> Result<(), String> {
     if let Some(state) = get_global_state() {
         let config_path = config::default_path();
         cfg.save(&config_path);
-        *state.config.lock().unwrap() = cfg;
+        
+        // Update config and re-register hotkey
+        let old_hotkey = {
+            let mut config = state.config.lock().unwrap();
+            let old = config.hotkey.clone();
+            *config = cfg.clone();
+            old
+        };
+        
+        // Re-register global hotkey if it changed
+        let new_hotkey = cfg.hotkey.clone();
+        if new_hotkey != old_hotkey {
+            use tauri_plugin_global_shortcut::{GlobalShortcutExt, Shortcut, ShortcutEvent};
+            
+            // Unregister old hotkey
+            if !old_hotkey.is_empty() {
+                if let Ok(shortcut) = old_hotkey.parse::<Shortcut>() {
+                    let _ = app.global_shortcut().unregister(shortcut);
+                }
+            }
+            
+            // Register new hotkey
+            if !new_hotkey.is_empty() {
+                if let Ok(shortcut) = new_hotkey.parse::<Shortcut>() {
+                    let shortcut_handler = move |_app: &tauri::AppHandle, _id: &Shortcut, _event: ShortcutEvent| {
+                        let _ = trigger_recording();
+                    };
+                    app.global_shortcut()
+                        .on_shortcut(shortcut, shortcut_handler)
+                        .unwrap_or_else(|e| tracing::warn!("Failed to register hotkey '{}': {}", new_hotkey, e));
+                    tracing::info!("🎹 Global hotkey re-registered: {}", new_hotkey);
+                }
+            }
+        }
+        
         Ok(())
     } else {
         Err("State not initialized".to_string())
@@ -240,6 +274,7 @@ fn main() {
 
     tauri::Builder::default()
         .plugin(tauri_plugin_shell::init())
+        .plugin(tauri_plugin_global_shortcut::Builder::new().build())
         .invoke_handler(tauri::generate_handler![
             get_status,
             start_service,
@@ -250,26 +285,46 @@ fn main() {
             list_audio_devices,
             get_current_device,
         ])
-        .setup(move |_app| {
+        .setup(move |app| {
+            // Register global hotkey
+            let config = app_state_arc.config.lock().unwrap();
+            let hotkey = config.hotkey.clone();
+            drop(config);
+
+            if !hotkey.is_empty() {
+                use tauri_plugin_global_shortcut::{GlobalShortcutExt, Shortcut, ShortcutEvent};
+                if let Ok(shortcut) = hotkey.parse::<Shortcut>() {
+                    let shortcut_handler = move |_app: &tauri::AppHandle, _id: &Shortcut, _event: ShortcutEvent| {
+                        let _ = trigger_recording();
+                    };
+                    app.global_shortcut()
+                        .on_shortcut(shortcut, shortcut_handler)
+                        .unwrap_or_else(|e| tracing::warn!("Failed to register hotkey '{}': {}", hotkey, e));
+                    tracing::info!("🎹 Global hotkey registered: {}", hotkey);
+                } else {
+                    tracing::warn!("Invalid hotkey format: {}", hotkey);
+                }
+            }
+
             // Window event handler - hide instead of close
             #[cfg(target_os = "macos")]
             {
                 use tauri::menu::{Menu, MenuItem};
                 use tauri::tray::TrayIconBuilder;
 
-                let show_i = MenuItem::with_id(_app, "show", "Show", true, None::<&str>)?;
-                let toggle_i = MenuItem::with_id(_app, "toggle", "Toggle Recording", true, None::<&str>)?;
-                let quit_i = MenuItem::with_id(_app, "quit", "Quit", true, None::<&str>)?;
-                let menu = Menu::with_items(_app, &[&show_i, &toggle_i, &quit_i])?;
+                let show_i = MenuItem::with_id(app, "show", "Show", true, None::<&str>)?;
+                let toggle_i = MenuItem::with_id(app, "toggle", "Toggle Recording", true, None::<&str>)?;
+                let quit_i = MenuItem::with_id(app, "quit", "Quit", true, None::<&str>)?;
+                let menu = Menu::with_items(app, &[&show_i, &toggle_i, &quit_i])?;
 
                 let mut tray_builder = TrayIconBuilder::new()
                     .menu(&menu)
                     .show_menu_on_left_click(false);
-                
-                if let Some(icon) = _app.default_window_icon().cloned() {
+
+                if let Some(icon) = app.default_window_icon().cloned() {
                     tray_builder = tray_builder.icon(icon);
                 }
-                
+
                 tray_builder = tray_builder.on_menu_event(|app, event| {
                     match event.id.as_ref() {
                         "show" => {
@@ -287,8 +342,8 @@ fn main() {
                         _ => {}
                     }
                 });
-                
-                let _tray = tray_builder.build(_app)?;
+
+                let _tray = tray_builder.build(app)?;
             }
 
             // Start the voice service
