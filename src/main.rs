@@ -240,6 +240,64 @@ fn get_current_device() -> Result<Option<DeviceDto>, String> {
     }
 }
 
+fn init_logging(config: &config::Config) {
+    use std::fs;
+    use tracing_appender::rolling::{RollingFileAppender, Rotation};
+    use tracing_subscriber::{fmt, prelude::*, EnvFilter};
+
+    let log_dir = std::path::Path::new(&config.log_dir);
+    if let Err(e) = fs::create_dir_all(log_dir) {
+        eprintln!("Failed to create log directory: {}", e);
+    }
+
+    let file_appender = RollingFileAppender::builder()
+        .rotation(Rotation::DAILY)
+        .filename_prefix("push-to-talk")
+        .filename_suffix(format!(".{}", config.log_format))
+        .build(log_dir)
+        .expect("Failed to create file appender");
+
+    let file_filter = EnvFilter::try_from_default_env()
+        .unwrap_or_else(|_| EnvFilter::new(&config.log_level));
+
+    // Console layer
+    let console_layer = fmt::layer()
+        .with_writer(std::io::stdout)
+        .with_target(false)
+        .with_thread_ids(false)
+        .with_file(false)
+        .with_line_number(false);
+
+    // File layer with dynamic formatting
+    let registry = tracing_subscriber::registry()
+        .with(console_layer)
+        .with(file_filter);
+
+    match config.log_format.as_str() {
+        "json" => {
+            let file_layer = fmt::layer()
+                .with_writer(file_appender)
+                .json()
+                .with_target(false)
+                .with_thread_ids(false)
+                .with_file(false)
+                .with_line_number(false);
+            registry.with(file_layer).init();
+        }
+        _ => {
+            let file_layer = fmt::layer()
+                .with_writer(file_appender)
+                .with_target(false)
+                .with_thread_ids(false)
+                .with_file(false)
+                .with_line_number(false);
+            registry.with(file_layer).init();
+        }
+    }
+
+    tracing::info!("📝 Logging initialized to {}", log_dir.display());
+}
+
 fn toggle_recording_inner(state: &AppState) {
     if !*state.is_running.lock().unwrap() {
         return;
@@ -264,11 +322,14 @@ fn toggle_recording_inner(state: &AppState) {
 fn main() {
     let config_path = config::default_path();
     let cfg = config::Config::load(&config_path);
-    
+
+    // Initialize logging first
+    init_logging(&cfg);
+
     let app_state = AppState::new();
     *app_state.config.lock().unwrap() = cfg;
     let app_state_arc = Arc::new(app_state);
-    
+
     // Initialize global state BEFORE tauri::Builder
     let _ = APP_STATE.set(app_state_arc.clone());
 
