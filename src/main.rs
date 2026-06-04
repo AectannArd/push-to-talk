@@ -392,13 +392,25 @@ fn main() {
                 if let Some(window) = app.get_webview_window("main") {
                     let window_clone = window.clone();
                     window.on_window_event(move |event| {
-                        if let tauri::WindowEvent::CloseRequested { api, .. } = event {
-                            // Prevent window close, hide instead
-                            api.prevent_close();
-                            let _ = window_clone.hide();
-                            tracing::info!("🪟 Window hidden (close prevented for tray app)");
+                        match event {
+                            tauri::WindowEvent::CloseRequested { api, .. } => {
+                                // Prevent window close, hide instead
+                                api.prevent_close();
+                                let _ = window_clone.hide();
+                                tracing::info!("🪟 Window close requested - hidden instead (tray app)");
+                            }
+                            tauri::WindowEvent::Destroyed => {
+                                tracing::warn!("⚠️ Window destroyed!");
+                            }
+                            tauri::WindowEvent::Focused(false) => {
+                                tracing::debug!("🪟 Window lost focus");
+                            }
+                            _ => {}
                         }
                     });
+                    tracing::info!("🪟 Window close handler registered");
+                } else {
+                    tracing::warn!("⚠️ Could not get main window for close handler");
                 }
             }
 
@@ -468,5 +480,11 @@ fn main() {
             Ok(())
         })
         .run(tauri::generate_context!())
-        .expect("error while running tauri application");
+        .unwrap_or_else(|e| {
+            tracing::error!("🚨 Tauri application error: {}", e);
+            eprintln!("🚨 Tauri application error: {}", e);
+        });
+
+    tracing::info!("👋 Tauri event loop exited");
+    eprintln!("👋 Tauri event loop exited");
 }

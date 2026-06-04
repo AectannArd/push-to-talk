@@ -165,6 +165,8 @@ fn run_service_loop(
                     info!("📝 \"{}\"", text);
                     copy_to_clipboard(&text);
                     info!("✅ Text copied to clipboard");
+                    thread::sleep(Duration::from_millis(100)); // Give clipboard time to settle
+                    info!("⌨️ Attempting to paste via Cmd+V...");
                     paste_from_clipboard();
                     info!("✅ Paste completed");
                 }
@@ -211,20 +213,57 @@ fn find_model(config: &Config) -> Option<std::path::PathBuf> {
     None
 }
 
+#[cfg(target_os = "macos")]
 fn paste_from_clipboard() {
-    use enigo::{Enigo, Key, Keyboard, Settings};
+    use std::process::Command;
 
-    match Enigo::new(&Settings::default()) {
-        Ok(mut enigo) => {
-            // Simulate Cmd+V to paste
-            enigo.key(Key::Meta, enigo::Direction::Press).ok();
-            enigo.key(Key::Unicode('v'), enigo::Direction::Click).ok();
-            enigo.key(Key::Meta, enigo::Direction::Release).ok();
+    info!("⌨️ Using AppleScript for paste operation...");
+
+    // Use AppleScript to simulate Cmd+V paste
+    let script = r#"
+        tell application "System Events"
+            keystroke "v" using command down
+        end tell
+    "#;
+
+    match Command::new("osascript")
+        .arg("-e")
+        .arg(script)
+        .output()
+    {
+        Ok(output) => {
+            if output.status.success() {
+                info!("⌨️ AppleScript paste executed successfully");
+            } else {
+                let stderr = String::from_utf8_lossy(&output.stderr);
+                error!("⚠ AppleScript paste failed: {}", stderr);
+                error!("⚠️ Grant Accessibility permission: System Preferences → Privacy & Security → Accessibility");
+                error!("⚠️ Add BOTH your terminal AND push-to-talk.app to the list");
+            }
         }
-        Err(e) => error!("⚠ Failed to init keyboard for paste: {}", e),
+        Err(e) => {
+            error!("⚠ Failed to execute AppleScript: {}", e);
+        }
     }
 }
 
+#[cfg(target_os = "macos")]
+fn copy_to_clipboard(text: &str) {
+    use objc2_app_kit::NSPasteboard;
+    use objc2_foundation::NSString;
+
+    unsafe {
+        let pasteboard = NSPasteboard::generalPasteboard();
+        pasteboard.clearContents();
+        let ns_string = NSString::from_str(text);
+        let result = pasteboard.setString_forType(&ns_string, objc2_app_kit::NSPasteboardTypeString);
+        if !result {
+            warn!("⚠ Failed to set clipboard text");
+        }
+    }
+}
+
+#[cfg(not(target_os = "macos"))]
 fn copy_to_clipboard(text: &str) {
     use arboard::Clipboard;
 
@@ -259,15 +298,15 @@ fn monitor_device_changes(
                     let device_exists = devices.iter().any(|d| &d.id == id);
                     if !device_exists {
                         warn!("⚠ Current device '{}' disconnected", id);
-                        
+
                         // Switch to first available device
                         if let Some(first_device) = devices.first() {
                             warn!("🔄 Switching to first available device: {}", first_device.name);
-                            
+
                             // Update the current device ID
                             let mut guard = current_device_id.lock().unwrap();
                             *guard = Some(first_device.id.clone());
-                            
+
                             // Note: We can't reinitialize the recorder mid-stream without more complex refactoring
                             // For now, we just log the switch. The next service restart will use the new device.
                             info!("💾 Device config updated - will use new device on next restart");

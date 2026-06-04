@@ -11,7 +11,6 @@ clap = { version = "4", features = ["derive"] }
 cpal = "0.17"
 hound = "3"
 whisper-rs = { version = "0.15", features = ["log_backend"] }
-enigo = "0.2"
 tracing = "0.1"
 tracing-log = "0.2"
 tracing-subscriber = { version = "0.3", features = ["env-filter", "fmt", "json"] }
@@ -31,10 +30,11 @@ tauri = { version = "2", features = ["tray-icon", "image-png"] }
 tauri-plugin-shell = "2"
 tauri-plugin-global-shortcut = "2"
 
-# macOS: Metal + CoreML GPU
+# macOS: Metal + CoreML GPU + NSPasteboard
 [target.'cfg(target_os = "macos")'.dependencies]
 whisper-rs = { version = "0.15", features = ["metal", "coreml", "log_backend"] }
 objc2-foundation = { version = "0.3", features = ["NSString", "std"] }
+objc2-app-kit = { version = "0.3", features = ["NSPasteboard", "std"] }
 
 # Windows: CUDA GPU
 [target.'cfg(windows)'.dependencies]
