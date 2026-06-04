@@ -253,7 +253,7 @@ fn init_logging(config: &config::Config) {
     let file_appender = RollingFileAppender::builder()
         .rotation(Rotation::DAILY)
         .filename_prefix("push-to-talk")
-        .filename_suffix(format!(".{}", config.log_format))
+        .filename_suffix(config.log_format.clone())
         .build(log_dir)
         .expect("Failed to create file appender");
 
