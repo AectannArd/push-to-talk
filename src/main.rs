@@ -251,10 +251,11 @@ fn init_logging(config: &config::Config) {
     }
 
     // Create minutely rolling file appender
-    // Filename format: push-to-talk.YYYY-MM-DD-HH-MM
+    // Filename format: push-to-talk.YYYY-MM-DD-HH-MM.log
     let file_appender = RollingFileAppender::builder()
         .rotation(Rotation::MINUTELY)
         .filename_prefix("push-to-talk")
+        .filename_suffix("log")
         .build(log_dir)
         .expect("Failed to create file appender");
 
