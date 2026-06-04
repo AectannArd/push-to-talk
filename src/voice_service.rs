@@ -163,8 +163,8 @@ fn run_service_loop(
                 }
                 Ok(text) => {
                     info!("📝 \"{}\"", text);
-                    type_text(&text);
                     copy_to_clipboard(&text);
+                    paste_from_clipboard();
                 }
                 Err(e) => error!("❌ Transcription error: {}", e),
             }
@@ -205,16 +205,17 @@ fn find_model(config: &Config) -> Option<std::path::PathBuf> {
     None
 }
 
-fn type_text(text: &str) {
-    use enigo::{Enigo, Keyboard, Settings};
+fn paste_from_clipboard() {
+    use enigo::{Enigo, Key, Keyboard, Settings};
 
     match Enigo::new(&Settings::default()) {
         Ok(mut enigo) => {
-            if let Err(e) = enigo.text(text) {
-                error!("⚠ Failed to type text: {}", e);
-            }
+            // Simulate Cmd+V to paste
+            enigo.key(Key::Meta, enigo::Direction::Press).ok();
+            enigo.key(Key::Unicode('v'), enigo::Direction::Click).ok();
+            enigo.key(Key::Meta, enigo::Direction::Release).ok();
         }
-        Err(e) => error!("⚠ Failed to init keyboard: {}", e),
+        Err(e) => error!("⚠ Failed to init keyboard for paste: {}", e),
     }
 }
 
