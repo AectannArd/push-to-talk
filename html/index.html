@@ -96,7 +96,6 @@
 
         <div class="control-buttons">
             <button class="btn btn-primary" id="toggleBtn">🎤 Start Recording</button>
-            <button class="btn btn-secondary" id="minimizeBtn">🗕 Hide to Tray</button>
         </div>
 
         <div class="tabs">
@@ -188,7 +187,6 @@
 
     <script>
         const { invoke } = window.__TAURI__.core;
-        const { getCurrentWindow } = window.__TAURI__.window;
         let isRecording = false, isServiceRunning = false;
         let devicePollInterval = null;
 
@@ -389,10 +387,6 @@
             } catch (error) {
                 showStatus('Failed: ' + error, 'error');
             }
-        });
-
-        document.getElementById('minimizeBtn').addEventListener('click', async () => {
-            await getCurrentWindow().hide();
         });
 
         // No save button needed - auto-save handles everything
