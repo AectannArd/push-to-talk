@@ -382,8 +382,12 @@
                     }
                 }, 100);
             }
-            document.getElementById('modelSearchDirs').value = (config.model_search_dirs || []).join(', ');
-            document.getElementById('logDir').value = config.log_dir || '';
+            // Handle model_search_dirs - use default if not set
+            const modelDirs = Array.isArray(config.model_search_dirs) 
+                ? config.model_search_dirs.join(', ') 
+                : '~/.push-to-talk/models';
+            document.getElementById('modelSearchDirs').value = modelDirs;
+            document.getElementById('logDir').value = config.log_dir || 'logs';
             document.getElementById('logLevel').value = config.log_level || 'info';
             document.getElementById('logFormat').value = config.log_format || 'text';
             document.getElementById('logRetention').value = config.log_retention_hours || 24;
