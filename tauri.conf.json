@@ -4,7 +4,7 @@
   "version": "0.1.0",
   "identifier": "ru.tcsbank.push-to-talk",
   "build": {
-    "frontendDist": "./html"
+    "frontendDist": "./ui"
   },
   "app": {
     "withGlobalTauri": true,
