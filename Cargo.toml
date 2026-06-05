@@ -29,7 +29,7 @@ tokio-stream = "0.1"
 futures-util = "0.3"
 
 # Tauri for GUI with global shortcuts
-tauri = { version = "2", features = ["tray-icon", "image-png"] }
+tauri = { version = "2", features = ["tray-icon", "image-png", "tracing"] }
 tauri-plugin-shell = "2"
 tauri-plugin-global-shortcut = "2"
 

@@ -353,6 +353,19 @@ async fn download_model(model_name: String, target_dir: String) -> Result<String
     Ok(format!("Downloaded {} to {}", model_name, target_path.display()))
 }
 
+/// Receive log messages from frontend
+#[tauri::command]
+fn frontend_log(level: String, message: String) {
+    match level.as_str() {
+        "error" => tracing::error!("🌐 {}", message),
+        "warn" => tracing::warn!("🌐 {}", message),
+        "info" => tracing::info!("🌐 {}", message),
+        "debug" => tracing::debug!("🌐 {}", message),
+        "trace" => tracing::trace!("🌐 {}", message),
+        _ => tracing::info!("🌐 {}", message),
+    }
+}
+
 fn format_size(bytes: u64) -> String {
     const KB: u64 = 1024;
     const MB: u64 = KB * 1024;
@@ -391,13 +404,17 @@ fn init_logging(config: &config::Config) {
     let file_filter = EnvFilter::try_from_default_env()
         .unwrap_or_else(|_| EnvFilter::new(&config.log_level));
 
-    // Console layer
+    // Console layer - always INFO level or higher for clean output
+    let console_filter = EnvFilter::try_from_default_env()
+        .unwrap_or_else(|_| EnvFilter::new("info"));
+
     let console_layer = fmt::layer()
         .with_writer(std::io::stdout)
         .with_target(false)
         .with_thread_ids(false)
         .with_file(false)
-        .with_line_number(false);
+        .with_line_number(false)
+        .with_filter(console_filter);
 
     // File layer
     let file_layer = fmt::layer()
@@ -515,6 +532,7 @@ fn main() {
             get_current_device,
             scan_models,
             download_model,
+            frontend_log,
         ])
         .setup(move |app| {
             // Prevent app from exiting when window is closed (tray app behavior)
