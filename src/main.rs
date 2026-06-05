@@ -146,48 +146,52 @@ fn get_config() -> config::Config {
 
 #[tauri::command]
 fn save_config(app: tauri::AppHandle, cfg: config::Config) -> Result<(), String> {
-    if let Some(state) = get_global_state() {
-        let config_path = config::default_path();
-        cfg.save(&config_path);
-        
-        // Update config and re-register hotkey
-        let old_hotkey = {
-            let mut config = state.config.lock().unwrap();
-            let old = config.hotkey.clone();
-            *config = cfg.clone();
-            old
-        };
-        
-        // Re-register global hotkey if it changed
-        let new_hotkey = cfg.hotkey.clone();
-        if new_hotkey != old_hotkey {
-            use tauri_plugin_global_shortcut::{GlobalShortcutExt, Shortcut, ShortcutEvent};
-            
-            // Unregister old hotkey
-            if !old_hotkey.is_empty() {
-                if let Ok(shortcut) = old_hotkey.parse::<Shortcut>() {
-                    let _ = app.global_shortcut().unregister(shortcut);
-                }
-            }
-            
-            // Register new hotkey
-            if !new_hotkey.is_empty() {
-                if let Ok(shortcut) = new_hotkey.parse::<Shortcut>() {
-                    let shortcut_handler = move |_app: &tauri::AppHandle, _id: &Shortcut, _event: ShortcutEvent| {
-                        let _ = trigger_recording();
-                    };
-                    app.global_shortcut()
-                        .on_shortcut(shortcut, shortcut_handler)
-                        .unwrap_or_else(|e| tracing::warn!("Failed to register hotkey '{}': {}", new_hotkey, e));
-                    tracing::info!("🎹 Global hotkey re-registered: {}", new_hotkey);
-                }
+    tracing::debug!("Save config called");
+
+    let Some(state) = get_global_state() else {
+        tracing::error!("💾 save_config: State not initialized");
+        return Err("State not initialized".to_string());
+    };
+
+    let config_path = config::default_path();
+    cfg.save(&config_path); // save() handles errors internally
+
+    // Update config and re-register hotkey
+    let old_hotkey = {
+        let mut config = state.config.lock().unwrap();
+        let old = config.hotkey.clone();
+        *config = cfg.clone();
+        old
+    };
+
+    // Re-register global hotkey if it changed
+    let new_hotkey = cfg.hotkey.clone();
+    if new_hotkey != old_hotkey {
+        use tauri_plugin_global_shortcut::{GlobalShortcutExt, Shortcut, ShortcutEvent};
+
+        // Unregister old hotkey
+        if !old_hotkey.is_empty() {
+            if let Ok(shortcut) = old_hotkey.parse::<Shortcut>() {
+                let _ = app.global_shortcut().unregister(shortcut);
             }
         }
-        
-        Ok(())
-    } else {
-        Err("State not initialized".to_string())
+
+        // Register new hotkey
+        if !new_hotkey.is_empty() {
+            if let Ok(shortcut) = new_hotkey.parse::<Shortcut>() {
+                let shortcut_handler = move |_app: &tauri::AppHandle, _id: &Shortcut, _event: ShortcutEvent| {
+                    let _ = trigger_recording();
+                };
+                app.global_shortcut()
+                    .on_shortcut(shortcut, shortcut_handler)
+                    .unwrap_or_else(|e| tracing::warn!("Failed to register hotkey '{}': {}", new_hotkey, e));
+                tracing::info!("🎹 Global hotkey re-registered: {}", new_hotkey);
+            }
+        }
     }
+
+    tracing::debug!("💾 Config saved successfully");
+    Ok(())
 }
 
 #[tauri::command]
@@ -259,18 +263,18 @@ fn get_current_device() -> Result<Option<DeviceDto>, String> {
 #[tauri::command]
 fn scan_models(model_search_dirs: Vec<String>) -> Result<Vec<ModelDto>, String> {
     let mut models = Vec::new();
-    
+
     for dir_str in model_search_dirs {
         let dir = shellexpand::tilde(&dir_str).to_string();
         let dir_path = Path::new(&dir);
-        
+
         if !dir_path.exists() {
             continue;
         }
-        
+
         let entries = fs::read_dir(dir_path)
             .map_err(|e| format!("Failed to read directory {}: {}", dir, e))?;
-        
+
         for entry in entries.flatten() {
             let path = entry.path();
             if path.is_file() {
@@ -279,7 +283,7 @@ fn scan_models(model_search_dirs: Vec<String>) -> Result<Vec<ModelDto>, String> 
                         let metadata = fs::metadata(&path)
                             .map_err(|e| format!("Failed to get metadata: {}", e))?;
                         let size = format_size(metadata.len());
-                        
+
                         models.push(ModelDto {
                             filename: name.to_string(),
                             size,
@@ -289,11 +293,11 @@ fn scan_models(model_search_dirs: Vec<String>) -> Result<Vec<ModelDto>, String> 
             }
         }
     }
-    
+
     // Remove duplicates and sort
     models.sort_by(|a, b| a.filename.cmp(&b.filename));
     models.dedup_by(|a, b| a.filename == b.filename);
-    
+
     Ok(models)
 }
 
@@ -302,54 +306,54 @@ async fn download_model(model_name: String, target_dir: String) -> Result<String
     use reqwest::Client;
     use tokio::io::AsyncWriteExt;
     use futures_util::StreamExt;
-    
+
     let huggingface_url = format!(
         "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/{}",
         model_name
     );
-    
+
     let target_path = shellexpand::tilde(&target_dir).to_string();
     let target_path = Path::new(&target_path).join(&model_name);
-    
+
     // Create directory if it doesn't exist
     if let Some(parent) = target_path.parent() {
         fs::create_dir_all(parent)
             .map_err(|e| format!("Failed to create directory: {}", e))?;
     }
-    
+
     let client = Client::new();
     let response = client
         .get(&huggingface_url)
         .send()
         .await
         .map_err(|e| format!("Failed to start download: {}", e))?;
-    
+
     if !response.status().is_success() {
         return Err(format!("Download failed: HTTP {}", response.status()));
     }
-    
+
     let total_size = response
         .content_length()
         .ok_or("Content-Length not available")?;
-    
+
     let mut file = tokio::fs::File::create(&target_path)
         .await
         .map_err(|e| format!("Failed to create file: {}", e))?;
-    
+
     let mut downloaded: u64 = 0;
     let mut stream = response.bytes_stream();
-    
+
     while let Some(chunk) = stream.next().await {
         let chunk = chunk.map_err(|e| format!("Download error: {}", e))?;
         file.write_all(&chunk)
             .await
             .map_err(|e| format!("Write error: {}", e))?;
-        
+
         downloaded += chunk.len() as u64;
         let progress = (downloaded as f64 / total_size as f64 * 100.0) as u32;
         tracing::info!("⬇️ Downloading {}: {}%", model_name, progress);
     }
-    
+
     Ok(format!("Downloaded {} to {}", model_name, target_path.display()))
 }
 
@@ -370,7 +374,7 @@ fn format_size(bytes: u64) -> String {
     const KB: u64 = 1024;
     const MB: u64 = KB * 1024;
     const GB: u64 = MB * 1024;
-    
+
     if bytes >= GB {
         format!("{:.1} GB", bytes as f64 / GB as f64)
     } else if bytes >= MB {
@@ -481,9 +485,9 @@ fn toggle_recording_inner(state: &AppState) {
     if !*state.is_running.lock().unwrap() {
         return;
     }
-    
+
     let was_recording = state.is_recording.swap(true, Ordering::SeqCst);
-    
+
     if was_recording {
         state.is_recording.store(false, Ordering::SeqCst);
         if let Some(handle) = state.voice_service.lock().unwrap().as_ref() {
@@ -625,7 +629,7 @@ fn main() {
 
             // Start the voice service
             let _ = start_service();
-            
+
             Ok(())
         })
         .run(tauri::generate_context!())

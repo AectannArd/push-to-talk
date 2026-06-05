@@ -34,18 +34,19 @@ function waitForTauri() {
 let devicePollInterval = null;
 let modelsScanned = false;
 let devicesLoaded = false;
+let isInitialLoad = true;
 
 waitForTauri()
     .then(inv => {
         invoke = inv;
-        
+
         // Set up console forwarding after invoke is available
         forwardConsole('log', 'trace');
         forwardConsole('debug', 'debug');
         forwardConsole('info', 'info');
         forwardConsole('warn', 'warn');
         forwardConsole('error', 'error');
-        
+
         // Load config once on startup
         loadConfig();
         // Poll only for status updates (recording state)
@@ -118,7 +119,7 @@ function startDeviceMonitoring() {
 async function saveConfigSilently() {
     const config = buildConfigFromForm();
     try {
-        await invoke('save_config', { config });
+        await invoke('save_config', { cfg: config });
     } catch (error) {
         console.error('Failed to save config:', error);
     }
@@ -144,13 +145,20 @@ function buildConfigFromForm() {
 // Auto-save config on field changes (debounced, silent)
 let autoSaveTimeout = null;
 function autoSaveConfig() {
+    if (isInitialLoad) return; // Skip auto-save during initial load
     if (autoSaveTimeout) clearTimeout(autoSaveTimeout);
     autoSaveTimeout = setTimeout(async () => {
-        const config = buildConfigFromForm();
         try {
-            await invoke('save_config', { config });
+            const config = buildConfigFromForm();
+            await invoke('save_config', { cfg: config });
         } catch (error) {
-            console.error('Auto-save failed:', error);
+            // Serialize error properly for Tauri errors
+            const errorMsg = typeof error === 'string' ? error : 
+                            error?.message || 
+                            error?.toString() || 
+                            JSON.stringify(error) || 
+                            'Unknown error';
+            console.error('Auto-save failed: ' + errorMsg);
         }
     }, 500);
 }
@@ -181,6 +189,7 @@ async function loadConfig() {
                 }, 500);
             }
         }
+        isInitialLoad = false; // Initial load complete, enable auto-save
     } catch (error) {
         showStatus('Failed to load state: ' + error, 'error');
     }
@@ -201,7 +210,7 @@ function updateStatusUI(status) {
     const indicator = document.getElementById('statusIndicator');
     const statusText = document.getElementById('statusText');
     const toggleBtn = document.getElementById('toggleBtn');
-    
+
     // Update status indicator and text
     indicator.className = 'status-indicator';
     if (status.is_recording) {
@@ -222,7 +231,7 @@ function updateStatusUI(status) {
         toggleBtn.classList.remove('btn-danger', 'btn-primary');
         toggleBtn.classList.add('btn-secondary');
     }
-    
+
     // Update session info cards
     document.getElementById('serviceStatus').textContent = status.is_service_running ? 'Running' : 'Stopped';
     document.getElementById('recordingStatus').textContent = status.is_recording ? 'Yes' : 'No';
