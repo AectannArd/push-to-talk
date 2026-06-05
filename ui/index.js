@@ -35,6 +35,8 @@ let devicePollInterval = null;
 let modelsScanned = false;
 let devicesLoaded = false;
 let isInitialLoad = true;
+let isRecording = false;
+let isServiceRunning = false;
 
 waitForTauri()
     .then(inv => {
