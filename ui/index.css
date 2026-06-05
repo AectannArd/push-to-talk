@@ -43,12 +43,18 @@ h1 { text-align: center; color: #667eea; margin-bottom: 10px; font-size: 28px; }
 label { display: block; margin-bottom: 6px; font-weight: 600; color: #444; font-size: 14px; }
 input, select {
     width: 100%; padding: 12px 14px; border: 2px solid #e0e0e0;
-    border-radius: 8px; font-size: 14px;
+    border-radius: 8px; font-size: 14px; height: 44px;
     transition: border-color 0.2s, box-shadow 0.2s;
 }
 input:focus, select:focus {
     outline: none; border-color: #667eea;
     box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.2);
+}
+.form-group input, .form-group select {
+    min-width: 0;
+}
+.form-row .form-group input, .form-row .form-group select {
+    width: 100%;
 }
 .hint { font-size: 12px; color: #888; margin-top: 4px; }
 .section-title {
@@ -102,6 +108,6 @@ input:focus, select:focus {
 }
 .model-list-placeholder { color: #888; margin: 0; }
 .model-download-row {
-    display: flex; gap: 8px;
+    display: flex; gap: 8px; align-items: flex-end;
 }
-.model-select { flex: 1; }
+.model-select { flex: 1; min-width: 0; }
