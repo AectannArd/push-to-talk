@@ -98,18 +98,22 @@ input:focus, select:focus {
 }
 
 /* Recording Control */
-.recording-control {
+.recording-row {
+    display: flex; gap: 15px; align-items: flex-end;
     margin: 20px 0;
 }
-.recording-control .btn {
-    width: 100%;
+.recording-row .btn {
+    flex: 0 0 auto; min-width: 200px;
+}
+.recording-row .transcription-box {
+    flex: 1; min-width: 0;
 }
 
 /* Transcription Box */
 .transcription-box {
     background: #f8f9fa; border: 1px solid #e0e0e0;
     border-radius: 8px; padding: 12px 14px;
-    min-height: 44px;
+    min-height: 44px; flex: 1;
 }
 .transcription-value {
     font-size: 14px; color: #333;
