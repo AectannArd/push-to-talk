@@ -18,9 +18,6 @@
                 <div id="statusIndicator" class="status-indicator"></div>
                 <span id="statusText" class="status-text">Initializing...</span>
             </div>
-            <div class="control-buttons">
-                <button class="btn btn-primary" id="toggleBtn">🎤 Start Recording</button>
-            </div>
             <div class="session-info">
                 <div class="session-item">
                     <span class="session-label">Service:</span>
@@ -29,10 +26,6 @@
                 <div class="session-item">
                     <span class="session-label">Recording:</span>
                     <span id="recordingStatus" class="session-value">No</span>
-                </div>
-                <div class="session-item full-width">
-                    <span class="session-label">Last Transcription:</span>
-                    <span id="lastTranscription" class="session-value">—</span>
                 </div>
             </div>
         </div>
@@ -58,6 +51,19 @@
                         <option value="">Use default device</option>
                     </select>
                     <div class="hint">Select an audio input device</div>
+                </div>
+                
+                <!-- Recording Control -->
+                <div class="recording-control">
+                    <button class="btn btn-primary" id="toggleBtn">🎤 Start Recording</button>
+                </div>
+                
+                <!-- Last Transcription -->
+                <div class="form-group">
+                    <label>Last Transcription</label>
+                    <div class="transcription-box">
+                        <span id="lastTranscription" class="transcription-value">—</span>
+                    </div>
                 </div>
                 
                 <div class="section-title">🧠 Whisper Model</div>
