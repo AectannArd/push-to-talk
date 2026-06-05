@@ -14,6 +14,7 @@ use std::sync::{
     Arc, Mutex,
 };
 use tauri::Manager;
+use tauri_plugin_single_instance;
 
 // Global state accessible anywhere
 static APP_STATE: OnceCell<Arc<AppState>> = OnceCell::new();
@@ -534,6 +535,17 @@ fn main() {
     tauri::Builder::default()
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_global_shortcut::Builder::new().build())
+        .plugin(
+            tauri_plugin_single_instance::Builder::new()
+                .callback(|app, _argv, _cwd| {
+                    tracing::info!("🔄 Another instance was launched - focusing existing window");
+                    if let Some(window) = app.get_webview_window("main") {
+                        let _ = window.show();
+                        let _ = window.set_focus();
+                    }
+                })
+                .build(),
+        )
         .invoke_handler(tauri::generate_handler![
             get_status,
             start_service,

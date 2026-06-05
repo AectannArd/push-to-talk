@@ -25,6 +25,7 @@ futures-util = "0.3"
 tauri = { version = "2", features = ["tray-icon", "image-png", "tracing"] }
 tauri-plugin-shell = "2"
 tauri-plugin-global-shortcut = "2"
+tauri-plugin-single-instance = "2"
 
 # macOS: Metal + CoreML GPU + NSPasteboard
 [target.'cfg(target_os = "macos")'.dependencies]
