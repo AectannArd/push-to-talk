@@ -5,12 +5,15 @@ mod recorder;
 mod transcriber;
 mod voice_service;
 
-use serde::{Deserialize, Serialize};
-use std::sync::{Arc, Mutex, atomic::{AtomicBool, Ordering}};
-use tauri::Manager;
 use once_cell::sync::OnceCell;
-use std::path::Path;
+use serde::{Deserialize, Serialize};
 use std::fs;
+use std::path::Path;
+use std::sync::{
+    atomic::{AtomicBool, Ordering},
+    Arc, Mutex,
+};
+use tauri::Manager;
 
 // Global state accessible anywhere
 static APP_STATE: OnceCell<Arc<AppState>> = OnceCell::new();
@@ -141,7 +144,7 @@ fn stop_service() -> Result<(), String> {
 fn get_config() -> config::Config {
     get_global_state()
         .map(|s| s.config.lock().unwrap().clone())
-        .unwrap_or_else(|| config::Config::default())
+        .unwrap_or_default()
 }
 
 #[tauri::command]
@@ -179,12 +182,15 @@ fn save_config(app: tauri::AppHandle, cfg: config::Config) -> Result<(), String>
         // Register new hotkey
         if !new_hotkey.is_empty() {
             if let Ok(shortcut) = new_hotkey.parse::<Shortcut>() {
-                let shortcut_handler = move |_app: &tauri::AppHandle, _id: &Shortcut, _event: ShortcutEvent| {
-                    let _ = trigger_recording();
-                };
+                let shortcut_handler =
+                    move |_app: &tauri::AppHandle, _id: &Shortcut, _event: ShortcutEvent| {
+                        let _ = trigger_recording();
+                    };
                 app.global_shortcut()
                     .on_shortcut(shortcut, shortcut_handler)
-                    .unwrap_or_else(|e| tracing::warn!("Failed to register hotkey '{}': {}", new_hotkey, e));
+                    .unwrap_or_else(|e| {
+                        tracing::warn!("Failed to register hotkey '{}': {}", new_hotkey, e)
+                    });
                 tracing::info!("🎹 Global hotkey re-registered: {}", new_hotkey);
             }
         }
@@ -303,9 +309,9 @@ fn scan_models(model_search_dirs: Vec<String>) -> Result<Vec<ModelDto>, String> 
 
 #[tauri::command]
 async fn download_model(model_name: String, target_dir: String) -> Result<String, String> {
+    use futures_util::StreamExt;
     use reqwest::Client;
     use tokio::io::AsyncWriteExt;
-    use futures_util::StreamExt;
 
     let huggingface_url = format!(
         "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/{}",
@@ -317,8 +323,7 @@ async fn download_model(model_name: String, target_dir: String) -> Result<String
 
     // Create directory if it doesn't exist
     if let Some(parent) = target_path.parent() {
-        fs::create_dir_all(parent)
-            .map_err(|e| format!("Failed to create directory: {}", e))?;
+        fs::create_dir_all(parent).map_err(|e| format!("Failed to create directory: {}", e))?;
     }
 
     let client = Client::new();
@@ -354,7 +359,11 @@ async fn download_model(model_name: String, target_dir: String) -> Result<String
         tracing::info!("⬇️ Downloading {}: {}%", model_name, progress);
     }
 
-    Ok(format!("Downloaded {} to {}", model_name, target_path.display()))
+    Ok(format!(
+        "Downloaded {} to {}",
+        model_name,
+        target_path.display()
+    ))
 }
 
 /// Receive log messages from frontend
@@ -405,12 +414,12 @@ fn init_logging(config: &config::Config) {
         .build(log_dir)
         .expect("Failed to create file appender");
 
-    let file_filter = EnvFilter::try_from_default_env()
-        .unwrap_or_else(|_| EnvFilter::new(&config.log_level));
+    let file_filter =
+        EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new(&config.log_level));
 
     // Console layer - always INFO level or higher for clean output
-    let console_filter = EnvFilter::try_from_default_env()
-        .unwrap_or_else(|_| EnvFilter::new("info"));
+    let console_filter =
+        EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info"));
 
     let console_layer = fmt::layer()
         .with_writer(std::io::stdout)
@@ -550,7 +559,9 @@ fn main() {
                                 // Prevent window close, hide instead
                                 api.prevent_close();
                                 let _ = window_clone.hide();
-                                tracing::info!("🪟 Window close requested - hidden instead (tray app)");
+                                tracing::info!(
+                                    "🪟 Window close requested - hidden instead (tray app)"
+                                );
                             }
                             tauri::WindowEvent::Destroyed => {
                                 tracing::warn!("⚠️ Window destroyed!");
@@ -575,12 +586,15 @@ fn main() {
             if !hotkey.is_empty() {
                 use tauri_plugin_global_shortcut::{GlobalShortcutExt, Shortcut, ShortcutEvent};
                 if let Ok(shortcut) = hotkey.parse::<Shortcut>() {
-                    let shortcut_handler = move |_app: &tauri::AppHandle, _id: &Shortcut, _event: ShortcutEvent| {
-                        let _ = trigger_recording();
-                    };
+                    let shortcut_handler =
+                        move |_app: &tauri::AppHandle, _id: &Shortcut, _event: ShortcutEvent| {
+                            let _ = trigger_recording();
+                        };
                     app.global_shortcut()
                         .on_shortcut(shortcut, shortcut_handler)
-                        .unwrap_or_else(|e| tracing::warn!("Failed to register hotkey '{}': {}", hotkey, e));
+                        .unwrap_or_else(|e| {
+                            tracing::warn!("Failed to register hotkey '{}': {}", hotkey, e)
+                        });
                     tracing::info!("🎹 Global hotkey registered: {}", hotkey);
                 } else {
                     tracing::warn!("Invalid hotkey format: {}", hotkey);
@@ -594,7 +608,8 @@ fn main() {
                 use tauri::tray::TrayIconBuilder;
 
                 let show_i = MenuItem::with_id(app, "show", "Show", true, None::<&str>)?;
-                let toggle_i = MenuItem::with_id(app, "toggle", "Toggle Recording", true, None::<&str>)?;
+                let toggle_i =
+                    MenuItem::with_id(app, "toggle", "Toggle Recording", true, None::<&str>)?;
                 let quit_i = MenuItem::with_id(app, "quit", "Quit", true, None::<&str>)?;
                 let menu = Menu::with_items(app, &[&show_i, &toggle_i, &quit_i])?;
 
@@ -606,22 +621,20 @@ fn main() {
                     tray_builder = tray_builder.icon(icon);
                 }
 
-                tray_builder = tray_builder.on_menu_event(|app, event| {
-                    match event.id.as_ref() {
-                        "show" => {
-                            if let Some(window) = app.get_webview_window("main") {
-                                let _ = window.show();
-                                let _ = window.set_focus();
-                            }
+                tray_builder = tray_builder.on_menu_event(|app, event| match event.id.as_ref() {
+                    "show" => {
+                        if let Some(window) = app.get_webview_window("main") {
+                            let _ = window.show();
+                            let _ = window.set_focus();
                         }
-                        "toggle" => {
-                            let _ = trigger_recording();
-                        }
-                        "quit" => {
-                            app.exit(0);
-                        }
-                        _ => {}
                     }
+                    "toggle" => {
+                        let _ = trigger_recording();
+                    }
+                    "quit" => {
+                        app.exit(0);
+                    }
+                    _ => {}
                 });
 
                 let _tray = tray_builder.build(app)?;

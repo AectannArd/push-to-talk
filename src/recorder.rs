@@ -59,21 +59,31 @@ impl Recorder {
             match pick_device_by_id(&host, id) {
                 Some(d) => (d, None),
                 None => {
-                    tracing::warn!("Configured device '{id}' not found, falling back to default device");
+                    tracing::warn!(
+                        "Configured device '{id}' not found, falling back to default device"
+                    );
                     // Fall back to default device
-                    let device = host.default_input_device()
+                    let device = host
+                        .default_input_device()
                         .context("No input device available")?;
                     let id = device.id().map(|id| id.to_string()).unwrap_or_default();
-                    let name = device.description().map(|d| d.name().to_string()).unwrap_or_default();
+                    let name = device
+                        .description()
+                        .map(|d| d.name().to_string())
+                        .unwrap_or_default();
                     (device, Some((id, name)))
                 }
             }
         } else {
             // Use default device without prompting (GUI mode)
-            let device = host.default_input_device()
+            let device = host
+                .default_input_device()
                 .context("No input device available")?;
             let id = device.id().map(|id| id.to_string()).unwrap_or_default();
-            let name = device.description().map(|d| d.name().to_string()).unwrap_or_default();
+            let name = device
+                .description()
+                .map(|d| d.name().to_string())
+                .unwrap_or_default();
             (device, Some((id, name)))
         };
 
@@ -83,7 +93,10 @@ impl Recorder {
 
         tracing::info!(
             "🎙  Using: {name} | {ch} ch, {rate} Hz → mono 16 kHz",
-            name = device.description().map(|d| d.name().to_string()).unwrap_or_else(|_| "<unknown>".into()),
+            name = device
+                .description()
+                .map(|d| d.name().to_string())
+                .unwrap_or_else(|_| "<unknown>".into()),
             ch = native_channels,
             rate = native_sample_rate,
         );
@@ -183,7 +196,6 @@ impl Recorder {
 
 /// Metadata about an audio input device.
 pub struct DeviceInfo {
-    pub index: usize,
     pub id: String,
     pub name: String,
     pub config: String,
@@ -206,13 +218,15 @@ pub fn list_input_devices() -> Result<Vec<DeviceInfo>> {
                 .id()
                 .map(|id| id.to_string())
                 .unwrap_or_else(|_| "<unknown>".into());
-            let name = d.description().map(|d| d.name().to_string()).unwrap_or_else(|_| "<unknown>".into());
+            let name = d
+                .description()
+                .map(|d| d.name().to_string())
+                .unwrap_or_else(|_| "<unknown>".into());
             let config = d
                 .default_input_config()
                 .map(|c| format!("{} ch, {} Hz", c.channels(), c.sample_rate()))
                 .unwrap_or_else(|_| "n/a".into());
             DeviceInfo {
-                index: i,
                 id,
                 name,
                 config,
@@ -237,56 +251,4 @@ fn pick_device_by_id(host: &cpal::Host, id_str: &str) -> Option<cpal::Device> {
         }
     }
     None
-}
-
-/// Interactively select a device from the list, returns (system_id, name).
-pub fn select_device_interactive() -> Result<(String, String)> {
-    let host = cpal::default_host();
-    let devices: Vec<cpal::Device> = host
-        .input_devices()
-        .context("No audio input devices found.")?
-        .collect();
-
-    if devices.is_empty() {
-        anyhow::bail!("No input devices available.");
-    }
-
-    // Print device list to console only (not to log)
-    eprintln!("┌─ Available input devices ────────────────────────────");
-    for (i, d) in devices.iter().enumerate() {
-        let id = d.id().map(|id| id.to_string()).unwrap_or_else(|_| "<unknown>".into());
-        let name = d.description().map(|d| d.name().to_string()).unwrap_or_else(|_| "<unknown>".into());
-        let cfg = d
-            .default_input_config()
-            .map(|c| format!("{} ch, {} Hz", c.channels(), c.sample_rate()));
-        let marker = if i == 0 { " (default)" } else { "" };
-        eprintln!(
-            "│ [{n}] {name}",
-            n = i + 1,
-        );
-        eprintln!("│     ID: {id} | {cfg}{marker}", cfg = cfg.as_deref().unwrap_or("n/a"));
-    }
-    eprintln!("└──────────────────────────────────────────────────────");
-
-    eprint!("\n🎙  Select device [1]: ");
-    let mut input = String::new();
-    std::io::stdin().read_line(&mut input).ok();
-    let input = input.trim().to_string();
-
-    let device = if input.is_empty() {
-        devices.first().cloned().unwrap()
-    } else {
-        let idx = input.parse::<usize>().unwrap_or(1);
-        if idx >= 1 && idx <= devices.len() {
-            devices[idx - 1].clone()
-        } else {
-            tracing::warn!("Invalid selection, using default device");
-            devices.first().cloned().unwrap()
-        }
-    };
-
-    let id = device.id().map(|id| id.to_string()).unwrap_or_default();
-    let name = device.description().map(|d| d.name().to_string()).unwrap_or_default();
-    tracing::info!("🎙  Selected device: {name} ({id})");
-    Ok((id, name))
 }

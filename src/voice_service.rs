@@ -4,12 +4,15 @@ use crate::config::Config;
 use crate::recorder::Recording;
 use crate::transcriber::Transcriber;
 
-use std::sync::{Arc, Mutex, atomic::{AtomicBool, Ordering}};
-use std::sync::mpsc;
 use std::path::Path;
+use std::sync::mpsc;
+use std::sync::{
+    atomic::{AtomicBool, Ordering},
+    Arc, Mutex,
+};
 use std::thread;
 use std::time::Duration;
-use tracing::{info, error, warn};
+use tracing::{error, info, warn};
 
 pub struct VoiceServiceHandle {
     stop_flag: Arc<AtomicBool>,
@@ -26,7 +29,10 @@ pub struct VoiceServiceInner {
 }
 
 impl VoiceServiceHandle {
-    pub fn start(config: Config, last_transcription: Arc<Mutex<Option<String>>>) -> Result<Self, anyhow::Error> {
+    pub fn start(
+        config: Config,
+        last_transcription: Arc<Mutex<Option<String>>>,
+    ) -> Result<Self, anyhow::Error> {
         let stop_flag = Arc::new(AtomicBool::new(false));
         let is_recording = Arc::new(AtomicBool::new(false));
 
@@ -231,11 +237,7 @@ fn paste_from_clipboard() {
         end tell
     "#;
 
-    match Command::new("osascript")
-        .arg("-e")
-        .arg(script)
-        .output()
-    {
+    match Command::new("osascript").arg("-e").arg(script).output() {
         Ok(output) => {
             if output.status.success() {
                 info!("⌨️ AppleScript paste executed successfully");
@@ -261,7 +263,8 @@ fn copy_to_clipboard(text: &str) {
         let pasteboard = NSPasteboard::generalPasteboard();
         pasteboard.clearContents();
         let ns_string = NSString::from_str(text);
-        let result = pasteboard.setString_forType(&ns_string, objc2_app_kit::NSPasteboardTypeString);
+        let result =
+            pasteboard.setString_forType(&ns_string, objc2_app_kit::NSPasteboardTypeString);
         if !result {
             warn!("⚠ Failed to set clipboard text");
         }
@@ -306,7 +309,10 @@ fn monitor_device_changes(
 
                         // Switch to first available device
                         if let Some(first_device) = devices.first() {
-                            warn!("🔄 Switching to first available device: {}", first_device.name);
+                            warn!(
+                                "🔄 Switching to first available device: {}",
+                                first_device.name
+                            );
 
                             // Update the current device ID
                             let mut guard = current_device_id.lock().unwrap();

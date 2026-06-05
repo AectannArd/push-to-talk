@@ -16,12 +16,11 @@ pub fn default_model_dirs() -> Vec<String> {
         .or_else(|_| std::env::var("HOME"))
         .map(PathBuf::from)
         .unwrap_or_else(|_| PathBuf::from("."));
-    vec![
-        home.join(".push-to-talk")
-            .join("models")
-            .to_string_lossy()
-            .to_string(),
-    ]
+    vec![home
+        .join(".push-to-talk")
+        .join("models")
+        .to_string_lossy()
+        .to_string()]
 }
 
 fn default_hotkey() -> String {
