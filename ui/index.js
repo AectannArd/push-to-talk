@@ -205,6 +205,7 @@ async function pollStatus() {
 }
 
 function updateStatusUI(status) {
+    const wasRecording = isRecording;
     isRecording = status.is_recording;
     isServiceRunning = status.is_service_running;
     const indicator = document.getElementById('statusIndicator');
@@ -235,7 +236,11 @@ function updateStatusUI(status) {
     // Update session info cards
     document.getElementById('serviceStatus').textContent = status.is_service_running ? 'Running' : 'Stopped';
     document.getElementById('recordingStatus').textContent = status.is_recording ? 'Yes' : 'No';
-    document.getElementById('lastTranscription').textContent = status.last_transcription || '—';
+    
+    // Update last transcription only when recording starts (transition from !recording to recording)
+    if (isRecording && !wasRecording && status.last_transcription) {
+        document.getElementById('lastTranscription').textContent = status.last_transcription;
+    }
 }
 
 function fillConfigForm(config) {
