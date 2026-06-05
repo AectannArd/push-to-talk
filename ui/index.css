@@ -56,21 +56,52 @@ input:focus, select:focus {
     margin: 25px 0 15px 0; padding-bottom: 8px;
     border-bottom: 2px solid #f0f0f0;
 }
+.config-title {
+    font-size: 20px; font-weight: 700; color: #333;
+    margin: 0 0 20px 0; text-align: center;
+}
 .status-message {
     text-align: center; padding: 12px; border-radius: 8px;
     margin-bottom: 20px; font-weight: 500; display: none;
 }
 .status-success { background: #d4edda; color: #155724; display: block; }
 .status-error { background: #f8d7da; color: #721c24; display: block; }
-.tabs {
-    display: flex; gap: 8px; margin-bottom: 20px;
-    border-bottom: 2px solid #e0e0e0; padding-bottom: 10px;
+
+/* Status Section */
+.status-section {
+    background: #f8f9fa; border-radius: 12px;
+    padding: 20px; margin-bottom: 25px;
 }
-.tab {
-    padding: 8px 16px; border: none; background: none;
-    cursor: pointer; font-weight: 600; color: #888;
-    border-radius: 8px 8px 0 0; transition: all 0.2s;
+.session-info {
+    display: grid; grid-template-columns: 1fr 1fr;
+    gap: 12px; margin-top: 15px;
 }
-.tab.active { color: #667eea; background: #f0f0f0; }
-.tab-content { display: none; }
-.tab-content.active { display: block; }
+.session-item {
+    display: flex; flex-direction: column;
+    background: white; padding: 12px;
+    border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+}
+.session-item.full-width { grid-column: 1 / -1; }
+.session-label {
+    font-size: 11px; color: #888; text-transform: uppercase;
+    letter-spacing: 0.5px; margin-bottom: 4px;
+}
+.session-value {
+    font-size: 14px; color: #333; font-weight: 500;
+    word-break: break-word;
+}
+
+/* Form layout */
+.form-row {
+    display: grid; grid-template-columns: 1fr 1fr;
+    gap: 15px;
+}
+.model-list {
+    border: 1px solid #e0e0e0; border-radius: 8px;
+    padding: 12px; background: #f8f9fa; min-height: 60px;
+}
+.model-list-placeholder { color: #888; margin: 0; }
+.model-download-row {
+    display: flex; gap: 8px;
+}
+.model-select { flex: 1; }

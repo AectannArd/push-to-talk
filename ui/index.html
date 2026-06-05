@@ -12,41 +12,34 @@
         <p class="subtitle">Voice transcription at your fingertips</p>
         <div id="statusMessage" class="status-message"></div>
 
-        <div class="status-bar">
-            <div id="statusIndicator" class="status-indicator"></div>
-            <span id="statusText" class="status-text">Initializing...</span>
-        </div>
-
-        <div class="control-buttons">
-            <button class="btn btn-primary" id="toggleBtn">🎤 Start Recording</button>
-        </div>
-
-        <div class="tabs">
-            <button class="tab active" data-tab="status">📊 Status</button>
-            <button class="tab" data-tab="config">⚙️ Configuration</button>
-        </div>
-
-        <div id="statusTab" class="tab-content active">
-            <div class="section-title">🎤 Current Session</div>
-            <div class="form-group">
-                <label>Service Status</label>
-                <input type="text" id="serviceStatus" value="Stopped" readonly>
+        <!-- Recording Status Section -->
+        <div class="status-section">
+            <div class="status-bar">
+                <div id="statusIndicator" class="status-indicator"></div>
+                <span id="statusText" class="status-text">Initializing...</span>
             </div>
-            <div class="form-group">
-                <label>Hotkey</label>
-                <input type="text" id="currentHotkey" value="Ctrl+Shift+T" readonly>
+            <div class="control-buttons">
+                <button class="btn btn-primary" id="toggleBtn">🎤 Start Recording</button>
             </div>
-            <div class="form-group">
-                <label>Language</label>
-                <input type="text" id="currentLanguage" value="auto" readonly>
-            </div>
-            <div class="form-group">
-                <label>Last Transcription</label>
-                <input type="text" id="lastTranscription" value="—" readonly>
+            <div class="session-info">
+                <div class="session-item">
+                    <span class="session-label">Service:</span>
+                    <span id="serviceStatus" class="session-value">Stopped</span>
+                </div>
+                <div class="session-item">
+                    <span class="session-label">Recording:</span>
+                    <span id="recordingStatus" class="session-value">No</span>
+                </div>
+                <div class="session-item full-width">
+                    <span class="session-label">Last Transcription:</span>
+                    <span id="lastTranscription" class="session-value">—</span>
+                </div>
             </div>
         </div>
 
-        <div id="configTab" class="tab-content">
+        <!-- Configuration Section -->
+        <div class="config-section">
+            <h2 class="config-title">⚙️ Configuration</h2>
             <form id="configForm">
                 <div class="section-title">🎤 Audio & Transcription</div>
                 <div class="form-group">
@@ -66,6 +59,7 @@
                     </select>
                     <div class="hint">Select an audio input device</div>
                 </div>
+                
                 <div class="section-title">🧠 Whisper Model</div>
                 <div class="form-group">
                     <label for="modelSearchDirs">Model Search Directories</label>
@@ -74,50 +68,55 @@
                 </div>
                 <div class="form-group">
                     <label>Available Models</label>
-                    <div id="modelList" style="border: 1px solid #e0e0e0; border-radius: 8px; padding: 12px; background: #f8f9fa; min-height: 60px;">
-                        <p style="color: #888; margin: 0;">Click "Scan for Models" to find available models</p>
+                    <div id="modelList" class="model-list">
+                        <p class="model-list-placeholder">Click "Scan for Models" to find available models</p>
                     </div>
-                    <button class="btn btn-secondary" id="scanModelsBtn" style="margin-top: 8px; width: 100%;">🔍 Scan for Models</button>
+                    <button type="button" class="btn btn-secondary" id="scanModelsBtn" style="margin-top: 8px; width: 100%;">🔍 Scan for Models</button>
                 </div>
                 <div class="form-group">
                     <label>Download Model</label>
-                    <div style="display: flex; gap: 8px;">
-                        <select id="modelToDownload" style="flex: 1;">
+                    <div class="model-download-row">
+                        <select id="modelToDownload" class="model-select">
                             <option value="ggml-base.bin">ggml-base.bin (74 MB)</option>
                             <option value="ggml-small.bin">ggml-small.bin (244 MB)</option>
                             <option value="ggml-medium.bin">ggml-medium.bin (769 MB)</option>
                         </select>
-                        <button class="btn btn-primary" id="downloadModelBtn" style="white-space: nowrap;">⬇️ Download</button>
+                        <button type="button" class="btn btn-primary" id="downloadModelBtn">⬇️ Download</button>
                     </div>
                     <div class="hint">Downloads from Hugging Face to ~/.push-to-talk/models/</div>
                 </div>
+
                 <div class="section-title">📝 Logging</div>
-                <div class="form-group">
-                    <label for="logDir">Log Directory</label>
-                    <input type="text" id="logDir" name="logDir" placeholder="logs">
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="logDir">Log Directory</label>
+                        <input type="text" id="logDir" name="logDir" placeholder="logs">
+                    </div>
+                    <div class="form-group">
+                        <label for="logLevel">Log Level</label>
+                        <select id="logLevel" name="logLevel">
+                            <option value="trace">Trace</option>
+                            <option value="debug">Debug</option>
+                            <option value="info">Info</option>
+                            <option value="warn">Warn</option>
+                            <option value="error">Error</option>
+                        </select>
+                    </div>
                 </div>
-                <div class="form-group">
-                    <label for="logLevel">Log Level</label>
-                    <select id="logLevel" name="logLevel">
-                        <option value="trace">Trace</option>
-                        <option value="debug">Debug</option>
-                        <option value="info">Info</option>
-                        <option value="warn">Warn</option>
-                        <option value="error">Error</option>
-                    </select>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="logFormat">Log Format</label>
+                        <select id="logFormat" name="logFormat">
+                            <option value="text">Text</option>
+                            <option value="json">JSON</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="logRetention">Log Retention (hours)</label>
+                        <input type="number" id="logRetention" name="logRetention" min="1" max="720" placeholder="24">
+                    </div>
                 </div>
-                <div class="form-group">
-                    <label for="logFormat">Log Format</label>
-                    <select id="logFormat" name="logFormat">
-                        <option value="text">Text</option>
-                        <option value="json">JSON</option>
-                    </select>
-                </div>
-                <div class="form-group">
-                    <label for="logRetention">Log Retention (hours)</label>
-                    <input type="number" id="logRetention" name="logRetention" min="1" max="720" placeholder="24">
-                    <div class="hint">Changes are saved automatically</div>
-                </div>
+                <div class="hint">Changes are saved automatically</div>
             </form>
         </div>
     </div>

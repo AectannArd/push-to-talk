@@ -155,15 +155,6 @@ function autoSaveConfig() {
     }, 500);
 }
 
-document.querySelectorAll('.tab').forEach(tab => {
-    tab.addEventListener('click', () => {
-        document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
-        document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
-        tab.classList.add('active');
-        document.getElementById(tab.dataset.tab + 'Tab').classList.add('active');
-    });
-});
-
 // Auto-save on form field changes
 const autoSaveFields = ['hotkey', 'language', 'deviceSelect', 'modelSearchDirs', 'logDir', 'logLevel', 'logFormat', 'logRetention'];
 autoSaveFields.forEach(id => {
@@ -210,6 +201,8 @@ function updateStatusUI(status) {
     const indicator = document.getElementById('statusIndicator');
     const statusText = document.getElementById('statusText');
     const toggleBtn = document.getElementById('toggleBtn');
+    
+    // Update status indicator and text
     indicator.className = 'status-indicator';
     if (status.is_recording) {
         indicator.classList.add('recording');
@@ -229,10 +222,11 @@ function updateStatusUI(status) {
         toggleBtn.classList.remove('btn-danger', 'btn-primary');
         toggleBtn.classList.add('btn-secondary');
     }
-    document.getElementById('serviceStatus').value = status.is_service_running ? 'Running' : 'Stopped';
-    document.getElementById('currentHotkey').value = status.hotkey;
-    document.getElementById('currentLanguage').value = status.language || 'auto';
-    document.getElementById('lastTranscription').value = status.last_transcription || '—';
+    
+    // Update session info cards
+    document.getElementById('serviceStatus').textContent = status.is_service_running ? 'Running' : 'Stopped';
+    document.getElementById('recordingStatus').textContent = status.is_recording ? 'Yes' : 'No';
+    document.getElementById('lastTranscription').textContent = status.last_transcription || '—';
 }
 
 function fillConfigForm(config) {
