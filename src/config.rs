@@ -84,6 +84,10 @@ pub struct Config {
     /// Log output format: "text" or "json".
     #[serde(default = "default_log_format")]
     pub log_format: String,
+
+    /// Window visibility state: true = hidden in tray, false = show window.
+    #[serde(default)]
+    pub window_hidden: bool,
 }
 
 impl Default for Config {
@@ -99,6 +103,7 @@ impl Default for Config {
             log_level: default_log_level(),
             log_retention_hours: default_retention_hours(),
             log_format: default_log_format(),
+            window_hidden: false,
         }
     }
 }

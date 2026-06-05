@@ -563,6 +563,7 @@ fn main() {
             // Prevent app from exiting when window is closed (tray app behavior)
             #[cfg(target_os = "macos")]
             {
+                let config_clone = app_state_arc.config.clone();
                 if let Some(window) = app.get_webview_window("main") {
                     let window_clone = window.clone();
                     window.on_window_event(move |event| {
@@ -571,8 +572,13 @@ fn main() {
                                 // Prevent window close, hide instead
                                 api.prevent_close();
                                 let _ = window_clone.hide();
+                                // Save window state to config
+                                let mut config = config_clone.lock().unwrap();
+                                config.window_hidden = true;
+                                let config_path = crate::config::default_path();
+                                config.save(&config_path);
                                 tracing::info!(
-                                    "🪟 Window close requested - hidden instead (tray app)"
+                                    "🪟 Window hidden - state saved (window_hidden=true)"
                                 );
                             }
                             tauri::WindowEvent::Destroyed => {
@@ -587,6 +593,22 @@ fn main() {
                     tracing::info!("🪟 Window close handler registered");
                 } else {
                     tracing::warn!("⚠️ Could not get main window for close handler");
+                }
+            }
+
+            // Restore window state from config
+            #[cfg(target_os = "macos")]
+            {
+                let config = app_state_arc.config.lock().unwrap();
+                let window_hidden = config.window_hidden;
+                drop(config);
+
+                if window_hidden {
+                    // Hide window on startup if it was hidden before
+                    if let Some(window) = app.get_webview_window("main") {
+                        let _ = window.hide();
+                        tracing::info!("🪟 Window hidden on startup (restored from config)");
+                    }
                 }
             }
 
@@ -619,6 +641,7 @@ fn main() {
                 use tauri::menu::{Menu, MenuItem};
                 use tauri::tray::TrayIconBuilder;
 
+                let config_clone = app_state_arc.config.clone();
                 let show_i = MenuItem::with_id(app, "show", "Show", true, None::<&str>)?;
                 let toggle_i =
                     MenuItem::with_id(app, "toggle", "Toggle Recording", true, None::<&str>)?;
@@ -633,21 +656,30 @@ fn main() {
                     tray_builder = tray_builder.icon(icon);
                 }
 
-                tray_builder = tray_builder.on_menu_event(|app, event| match event.id.as_ref() {
-                    "show" => {
-                        if let Some(window) = app.get_webview_window("main") {
-                            let _ = window.show();
-                            let _ = window.set_focus();
+                tray_builder =
+                    tray_builder.on_menu_event(move |app, event| match event.id.as_ref() {
+                        "show" => {
+                            if let Some(window) = app.get_webview_window("main") {
+                                let _ = window.show();
+                                let _ = window.set_focus();
+                                // Reset window_hidden state
+                                let mut config = config_clone.lock().unwrap();
+                                config.window_hidden = false;
+                                let config_path = crate::config::default_path();
+                                config.save(&config_path);
+                                tracing::info!(
+                                    "🪟 Window shown - state saved (window_hidden=false)"
+                                );
+                            }
                         }
-                    }
-                    "toggle" => {
-                        let _ = trigger_recording();
-                    }
-                    "quit" => {
-                        app.exit(0);
-                    }
-                    _ => {}
-                });
+                        "toggle" => {
+                            let _ = trigger_recording();
+                        }
+                        "quit" => {
+                            app.exit(0);
+                        }
+                        _ => {}
+                    });
 
                 let _tray = tray_builder.build(app)?;
             }
