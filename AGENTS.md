@@ -8,6 +8,7 @@
 
 ## Code Style
 - All errors shouldn't be left without attention and should be logged as `error!` traces
+- Run `cargo fmt` before every commit
 
 ## Debug
 - Lookup application debug logs in user home directory in folder `.push-to-talk/logs/`
