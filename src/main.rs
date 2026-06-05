@@ -141,7 +141,7 @@ fn stop_service() -> Result<(), String> {
 fn get_config() -> config::Config {
     get_global_state()
         .map(|s| s.config.lock().unwrap().clone())
-        .unwrap_or_default()
+        .unwrap_or_else(|| config::Config::default())
 }
 
 #[tauri::command]
