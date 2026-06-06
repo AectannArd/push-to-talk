@@ -696,17 +696,17 @@ fn main() {
                 }
             }
 
-            // Restore window state from config
+            // Restore window state from config (window created hidden)
             {
                 let config = app_state_arc.config.lock().unwrap();
                 let window_hidden = config.window_hidden;
                 drop(config);
 
-                if window_hidden {
-                    // Hide window on startup if it was hidden before
+                if !window_hidden {
                     if let Some(window) = app.get_webview_window("main") {
-                        let _ = window.hide();
-                        tracing::info!("🪟 Window hidden on startup (restored from config)");
+                        let _ = window.show();
+                        let _ = window.set_focus();
+                        tracing::info!("🪟 Window shown on startup (restored from config)");
                     }
                 }
             }
