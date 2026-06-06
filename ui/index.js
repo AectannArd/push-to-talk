@@ -38,6 +38,7 @@ let isInitialLoad = true;
 let isRecording = false;
 let isServiceRunning = false;
 let selectedModel = null;  // full path to the selected ggml-*.bin file (from ModelDto.path)
+let lastModelScan = '';     // JSON snapshot of last scan result — skip DOM update if unchanged
 
 // All downloadable Whisper models from HuggingFace
 const DOWNLOADABLE_MODELS = [
@@ -322,13 +323,20 @@ document.addEventListener('keydown', async (e) => {
 });
 
 // Scan model directories and refresh the UI. Returns the found models.
+// Skips DOM update if the result is identical to the last scan.
 async function scanModels() {
-    const modelListEl = document.getElementById('modelList');
-    modelListEl.innerHTML = '<p style="color: #888;">Scanning...</p>';
-
     try {
         const config = buildConfigFromForm();
         const models = await invoke('scan_models', { modelSearchDirs: config.model_search_dirs });
+
+        // Skip DOM rebuild if nothing changed since last scan
+        const snapshot = JSON.stringify(models.map(m => m.filename).sort());
+        if (snapshot === lastModelScan) {
+            return models;
+        }
+        lastModelScan = snapshot;
+
+        const modelListEl = document.getElementById('modelList');
 
         if (models.length === 0) {
             modelListEl.innerHTML = '<p style="color: #888;">No models found. Download a model or update search directories.</p>';
