@@ -36,12 +36,6 @@
             <form id="configForm">
                 <!-- ── Common: frequently-used controls ── -->
                 <div class="section-title">🎛️ Common</div>
-                <div class="form-group">
-                    <label for="deviceSelect">Audio Input Device</label>
-                    <select id="deviceSelect" name="deviceSelect">
-                        <option value="">Use default device</option>
-                    </select>
-                </div>
 
                 <!-- Recording Control and Last Transcription -->
                 <div class="recording-row">
@@ -57,15 +51,12 @@
                         <p class="model-list-placeholder">Scanning model directories...</p>
                     </div>
                 </div>
+
                 <div class="form-group">
-                    <label>Download Model</label>
-                    <div class="model-download-row">
-                        <select id="modelToDownload" class="model-select">
-                            <option value="">Scan models first...</option>
-                        </select>
-                        <button type="button" class="btn btn-primary" id="downloadModelBtn">⬇️ Download</button>
-                    </div>
-                    <div class="hint">Downloads from Hugging Face to the first directory in Model Search Directories</div>
+                    <label for="deviceSelect">Audio Input Device</label>
+                    <select id="deviceSelect" name="deviceSelect">
+                        <option value="">Use default device</option>
+                    </select>
                 </div>
 
                 <!-- ── Audio & Transcription: hotkey + language ── -->
@@ -81,12 +72,22 @@
                     <div class="hint">Use "auto" for automatic detection, or specify: ru, en, de, etc.</div>
                 </div>
 
-                <!-- ── Whisper Model: search dirs ── -->
+                <!-- ── Whisper Model: search dirs + download ── -->
                 <div class="section-title">🧠 Whisper Model</div>
                 <div class="form-group">
                     <label for="modelSearchDirs">Model Search Directories</label>
                     <input type="text" id="modelSearchDirs" name="modelSearchDirs" placeholder="~/.push-to-talk/models">
                     <div class="hint">Comma-separated list of directories</div>
+                </div>
+                <div class="form-group">
+                    <label>Download Model</label>
+                    <div class="model-download-row">
+                        <select id="modelToDownload" class="model-select">
+                            <option value="">Scan models first...</option>
+                        </select>
+                        <button type="button" class="btn btn-primary" id="downloadModelBtn">⬇️ Download</button>
+                    </div>
+                    <div class="hint">Downloads from Hugging Face to the first directory in Model Search Directories</div>
                 </div>
 
                 <!-- ── Logging ── -->
