@@ -17,6 +17,7 @@ use tracing::{error, info, warn};
 pub struct VoiceServiceHandle {
     stop_flag: Arc<AtomicBool>,
     thread_handle: Option<thread::JoinHandle<()>>,
+    monitor_handle: Option<thread::JoinHandle<()>>,
     pub state: Arc<VoiceServiceInner>,
 }
 
@@ -25,16 +26,17 @@ pub struct VoiceServiceInner {
     pub last_transcription: Arc<Mutex<Option<String>>>,
     recording: Arc<Mutex<Option<Recording>>>,
     tx: mpsc::Sender<Vec<i16>>,
-    rec: Arc<crate::recorder::Recorder>,
+    rec: Arc<Mutex<crate::recorder::Recorder>>,
 }
 
 impl VoiceServiceHandle {
     pub fn start(
         config: Config,
         last_transcription: Arc<Mutex<Option<String>>>,
+        app_is_recording: Arc<AtomicBool>,
+        app_config: Arc<Mutex<Config>>,
     ) -> Result<Self, anyhow::Error> {
         let stop_flag = Arc::new(AtomicBool::new(false));
-        let is_recording = Arc::new(AtomicBool::new(false));
 
         // Load model first
         let model_path = match find_model(&config) {
@@ -48,11 +50,10 @@ impl VoiceServiceHandle {
             .map_err(|e| anyhow::anyhow!("Failed to load transcriber: {}", e))?;
         let tr = Arc::new(Mutex::new(transcriber));
 
-        // Initialize recorder and store device ID
-        let device_id = config.device_id.clone();
+        // Initialize recorder
         let (recorder, _device_info) = crate::recorder::Recorder::new(config.device_id.as_deref())
             .map_err(|e| anyhow::anyhow!("Failed to initialize recorder: {}", e))?;
-        let rec = Arc::new(recorder);
+        let rec = Arc::new(Mutex::new(recorder));
 
         // Channel for audio data
         let (tx, rx) = mpsc::channel::<Vec<i16>>();
@@ -61,7 +62,7 @@ impl VoiceServiceHandle {
         let recording: Arc<Mutex<Option<Recording>>> = Arc::new(Mutex::new(None));
 
         let state = Arc::new(VoiceServiceInner {
-            is_recording: is_recording.clone(),
+            is_recording: app_is_recording,
             last_transcription,
             recording,
             tx,
@@ -76,15 +77,17 @@ impl VoiceServiceHandle {
         });
 
         // Spawn device monitoring thread
+        let monitor_state = state.clone();
+        let monitor_config = app_config;
         let monitor_stop = stop_flag.clone();
-        let monitor_device_id = Arc::new(Mutex::new(device_id));
-        let _monitor_handle = thread::spawn(move || {
-            monitor_device_changes(monitor_device_id, monitor_stop);
+        let monitor_handle = thread::spawn(move || {
+            monitor_device_changes(monitor_state, monitor_config, monitor_stop);
         });
 
         Ok(Self {
             stop_flag,
             thread_handle: Some(thread_handle),
+            monitor_handle: Some(monitor_handle),
             state,
         })
     }
@@ -106,6 +109,9 @@ impl VoiceServiceHandle {
         if let Some(handle) = self.thread_handle {
             let _ = handle.join();
         }
+        if let Some(handle) = self.monitor_handle {
+            let _ = handle.join();
+        }
     }
 }
 
@@ -115,8 +121,10 @@ impl VoiceServiceInner {
             return false; // Already recording
         }
 
-        match self.rec.start() {
+        let rec_guard = self.rec.lock().unwrap();
+        match rec_guard.start() {
             Ok(r) => {
+                drop(rec_guard);
                 *self.recording.lock().unwrap() = Some(r);
                 info!("🎤 Recording...");
                 true
@@ -289,8 +297,10 @@ fn copy_to_clipboard(text: &str) {
 }
 
 /// Monitor device changes and switch to first available device if current device is lost.
+/// If recording is active when the device disconnects, force-stop it immediately.
 fn monitor_device_changes(
-    current_device_id: Arc<Mutex<Option<String>>>,
+    state: Arc<VoiceServiceInner>,
+    config: Arc<Mutex<Config>>,
     stop_flag: Arc<AtomicBool>,
 ) {
     loop {
@@ -299,37 +309,68 @@ fn monitor_device_changes(
             break;
         }
 
-        let device_id_guard = current_device_id.lock().unwrap();
-        let current_id = device_id_guard.clone();
-        drop(device_id_guard);
+        // Read current device ID from config
+        let current_device_id = {
+            let cfg = config.lock().unwrap();
+            cfg.device_id.clone()
+        };
 
         // Only monitor if we have a configured device
-        if let Some(ref id) = current_id {
+        if let Some(ref id) = current_device_id {
             // Check if device is still available
             match crate::recorder::list_input_devices() {
                 Ok(devices) => {
+                    if devices.is_empty() {
+                        warn!("⚠ No audio input devices available");
+                        continue;
+                    }
+
                     let device_exists = devices.iter().any(|d| &d.id == id);
-                    if !device_exists {
-                        warn!("⚠ Current device '{}' disconnected", id);
+                    if device_exists {
+                        continue; // Device still connected, nothing to do
+                    }
 
-                        // Switch to first available device
-                        if let Some(first_device) = devices.first() {
-                            warn!(
-                                "🔄 Switching to first available device: {}",
-                                first_device.name
+                    warn!("⚠ Current device '{}' disconnected", id);
+
+                    // 1. If currently recording, force-stop immediately
+                    if state.is_recording.load(Ordering::SeqCst) {
+                        warn!(
+                            "⚠ Device disconnected during active recording — forcing stop"
+                        );
+                        state.stop_recording();
+                    }
+
+                    // 2. Build a new Recorder for the first available device
+                    let first = &devices[0];
+                    warn!("🔄 Switching to: {}", first.name);
+
+                    match crate::recorder::Recorder::new(Some(&first.id)) {
+                        Ok((new_recorder, _)) => {
+                            // 3. Atomically swap in the new recorder
+                            {
+                                let mut rec_guard = state.rec.lock().unwrap();
+                                *rec_guard = new_recorder;
+                            }
+                            info!("✅ Recorder reinitialized for: {}", first.name);
+                        }
+                        Err(e) => {
+                            error!(
+                                "❌ Failed to create recorder for new device: {}",
+                                e
                             );
-
-                            // Update the current device ID
-                            let mut guard = current_device_id.lock().unwrap();
-                            *guard = Some(first_device.id.clone());
-
-                            // Note: We can't reinitialize the recorder mid-stream without more complex refactoring
-                            // For now, we just log the switch. The next service restart will use the new device.
-                            info!("💾 Device config updated - will use new device on next restart");
-                        } else {
-                            warn!("⚠ No audio input devices available");
+                            continue; // Skip config update — keep trying on next poll
                         }
                     }
+
+                    // 4. Persist the new device to config
+                    {
+                        let mut cfg = config.lock().unwrap();
+                        cfg.device_id = Some(first.id.clone());
+                        cfg.device_name = Some(first.name.clone());
+                        let config_path = crate::config::default_path();
+                        cfg.save(&config_path);
+                    }
+                    info!("💾 Config updated with new device: {}", first.name);
                 }
                 Err(e) => {
                     warn!("⚠ Failed to list devices during monitoring: {}", e);

@@ -109,8 +109,15 @@ fn start_service() -> Result<(), String> {
         }
         let config = state.config.lock().unwrap().clone();
         let last_transcription = state.last_transcription.clone();
+        let is_recording = state.is_recording.clone();
+        let app_config = state.config.clone();
 
-        match voice_service::VoiceServiceHandle::start(config, last_transcription) {
+        match voice_service::VoiceServiceHandle::start(
+            config,
+            last_transcription,
+            is_recording,
+            app_config,
+        ) {
             Ok(handle) => {
                 *state.voice_service.lock().unwrap() = Some(handle);
                 *running = true;
@@ -134,7 +141,7 @@ fn stop_service() -> Result<(), String> {
             handle.stop();
         }
         *running = false;
-        state.is_recording.store(false, Ordering::SeqCst);
+        // is_recording is reset by the handle's stop_recording() during teardown
         Ok(())
     } else {
         Err("State not initialized".to_string())
@@ -184,8 +191,8 @@ fn save_config(app: tauri::AppHandle, cfg: config::Config) -> Result<(), String>
         if !new_hotkey.is_empty() {
             if let Ok(shortcut) = new_hotkey.parse::<Shortcut>() {
                 let shortcut_handler =
-                    move |_app: &tauri::AppHandle, _id: &Shortcut, _event: ShortcutEvent| {
-                        let _ = trigger_recording();
+                    move |_app: &tauri::AppHandle, _id: &Shortcut, event: ShortcutEvent| {
+                        handle_shortcut_event(event);
                     };
                 app.global_shortcut()
                     .on_shortcut(shortcut, shortcut_handler)
@@ -496,10 +503,9 @@ fn toggle_recording_inner(state: &AppState) {
         return;
     }
 
-    let was_recording = state.is_recording.swap(true, Ordering::SeqCst);
+    let is_recording = state.is_recording.load(Ordering::SeqCst);
 
-    if was_recording {
-        state.is_recording.store(false, Ordering::SeqCst);
+    if is_recording {
         if let Some(handle) = state.voice_service.lock().unwrap().as_ref() {
             let _ = handle.stop_recording();
         }
@@ -509,6 +515,39 @@ fn toggle_recording_inner(state: &AppState) {
             let _ = handle.start_recording();
         }
         tracing::info!("🎤 Starting recording");
+    }
+}
+
+/// Handle global shortcut press/release events.
+/// Press starts recording, release stops it.
+/// If the monitor force-stopped recording (device disconnect), release is a no-op
+/// and the user must press again to start on the new device.
+fn handle_shortcut_event(event: tauri_plugin_global_shortcut::ShortcutEvent) {
+    use tauri_plugin_global_shortcut::ShortcutState;
+
+    if let Some(state) = get_global_state() {
+        if !*state.is_running.lock().unwrap() {
+            return;
+        }
+
+        match event.state {
+            ShortcutState::Pressed => {
+                if !state.is_recording.load(Ordering::SeqCst) {
+                    if let Some(handle) = state.voice_service.lock().unwrap().as_ref() {
+                        let _ = handle.start_recording();
+                    }
+                    tracing::info!("🎤 Hotkey press — starting recording");
+                }
+            }
+            ShortcutState::Released => {
+                if state.is_recording.load(Ordering::SeqCst) {
+                    if let Some(handle) = state.voice_service.lock().unwrap().as_ref() {
+                        let _ = handle.stop_recording();
+                    }
+                    tracing::info!("🛑 Hotkey release — stopping recording");
+                }
+            }
+        }
     }
 }
 
@@ -621,8 +660,8 @@ fn main() {
                 use tauri_plugin_global_shortcut::{GlobalShortcutExt, Shortcut, ShortcutEvent};
                 if let Ok(shortcut) = hotkey.parse::<Shortcut>() {
                     let shortcut_handler =
-                        move |_app: &tauri::AppHandle, _id: &Shortcut, _event: ShortcutEvent| {
-                            let _ = trigger_recording();
+                        move |_app: &tauri::AppHandle, _id: &Shortcut, event: ShortcutEvent| {
+                            handle_shortcut_event(event);
                         };
                     app.global_shortcut()
                         .on_shortcut(shortcut, shortcut_handler)
