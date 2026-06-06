@@ -262,9 +262,36 @@ fn paste_from_clipboard() {
     }
 }
 
-#[cfg(not(target_os = "macos"))]
+#[cfg(target_os = "windows")]
 fn paste_from_clipboard() {
-    // On non-macOS, paste is handled by the frontend or user manually
+    use std::thread;
+    use std::time::Duration;
+    use windows::Win32::UI::Input::KeyboardAndMouse::{
+        keybd_event, KEYBD_EVENT_FLAGS, KEYEVENTF_KEYUP, VK_CONTROL, VK_V,
+    };
+
+    // Give clipboard time to settle
+    thread::sleep(Duration::from_millis(50));
+
+    info!("⌨️ Simulating Ctrl+V via keybd_event...");
+
+    unsafe {
+        // Press Ctrl
+        keybd_event(VK_CONTROL.0 as u8, 0, KEYBD_EVENT_FLAGS::default(), 0);
+        // Press V
+        keybd_event(VK_V.0 as u8, 0, KEYBD_EVENT_FLAGS::default(), 0);
+        // Release V
+        keybd_event(VK_V.0 as u8, 0, KEYEVENTF_KEYUP, 0);
+        // Release Ctrl
+        keybd_event(VK_CONTROL.0 as u8, 0, KEYEVENTF_KEYUP, 0);
+    }
+
+    info!("✅ Paste completed");
+}
+
+#[cfg(target_os = "linux")]
+fn paste_from_clipboard() {
+    // On Linux, paste is handled by the frontend or user manually
 }
 
 #[cfg(target_os = "macos")]
