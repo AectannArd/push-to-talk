@@ -37,8 +37,11 @@ let devicesLoaded = false;
 let isInitialLoad = true;
 let isRecording = false;
 let isServiceRunning = false;
-let selectedModel = null;  // full path to the selected ggml-*.bin file (from ModelDto.path)
-let lastModelScan = '';     // JSON snapshot of last scan result — skip DOM update if unchanged
+let uiIsRecording = false;        // local UI button state — decoupled from global hotkey state
+let uiTranscriptionPending = false; // true after UI stop — expect a new transcription
+let lastDisplayedTranscription = null;
+let selectedModel = null;
+let lastModelScan = '';
 
 // All downloadable Whisper models from HuggingFace
 const DOWNLOADABLE_MODELS = [
@@ -216,41 +219,36 @@ async function pollStatus() {
 }
 
 function updateStatusUI(status) {
-    const wasRecording = isRecording;
     isRecording = status.is_recording;
     isServiceRunning = status.is_service_running;
+
+    // Indicator light and status text — always reflect real server state
     const indicator = document.getElementById('statusIndicator');
     const statusText = document.getElementById('statusText');
-    const toggleBtn = document.getElementById('toggleBtn');
-
-    // Update status indicator and text
     indicator.className = 'status-indicator';
     if (status.is_recording) {
         indicator.classList.add('recording');
         statusText.textContent = '🔴 Recording...';
-        toggleBtn.textContent = '⏹ Stop';
-        toggleBtn.classList.remove('btn-primary');
-        toggleBtn.classList.add('btn-danger');
     } else if (status.is_service_running) {
         indicator.classList.add('running');
         statusText.textContent = 'Ready (press button or hotkey to record)';
-        toggleBtn.textContent = '🎤 Start Recording';
-        toggleBtn.classList.remove('btn-danger');
-        toggleBtn.classList.add('btn-primary');
     } else {
         statusText.textContent = 'Service stopped';
-        toggleBtn.textContent = '▶ Start Service';
-        toggleBtn.classList.remove('btn-danger', 'btn-primary');
-        toggleBtn.classList.add('btn-secondary');
     }
 
-    // Update session info cards
+    // Button appearance — tracked locally, decoupled from global hotkey
+    updateButtonAppearance();
+
+    // Session info cards
     document.getElementById('serviceStatus').textContent = status.is_service_running ? 'Running' : 'Stopped';
     document.getElementById('recordingStatus').textContent = status.is_recording ? 'Yes' : 'No';
-    
-    // Update last transcription only when recording starts (transition from !recording to recording)
-    if (isRecording && !wasRecording && status.last_transcription) {
+
+    // Update transcription ONLY after UI-initiated stop
+    if (uiTranscriptionPending && status.last_transcription &&
+        status.last_transcription !== lastDisplayedTranscription) {
         document.getElementById('lastTranscription').textContent = status.last_transcription;
+        lastDisplayedTranscription = status.last_transcription;
+        uiTranscriptionPending = false;
     }
 }
 
@@ -284,15 +282,37 @@ function fillConfigForm(config) {
     document.getElementById('logRetention').value = config.log_retention_hours || 24;
 }
 
+function updateButtonAppearance() {
+    const toggleBtn = document.getElementById('toggleBtn');
+    toggleBtn.classList.remove('btn-primary', 'btn-danger', 'btn-secondary');
+    if (uiIsRecording) {
+        toggleBtn.textContent = '⏹ Stop';
+        toggleBtn.classList.add('btn-danger');
+    } else if (isServiceRunning) {
+        toggleBtn.textContent = '🎤 Start Recording';
+        toggleBtn.classList.add('btn-primary');
+    } else {
+        toggleBtn.textContent = '▶ Start Service';
+        toggleBtn.classList.add('btn-secondary');
+    }
+}
+
 document.getElementById('toggleBtn').addEventListener('click', async () => {
     try {
         if (!isServiceRunning) {
             await invoke('start_service');
             showStatus('Service started', 'success');
+            pollStatus();
         } else {
             await invoke('trigger_recording');
+            uiIsRecording = !uiIsRecording;
+            if (!uiIsRecording) {
+                // UI just stopped recording — expect a new transcription soon
+                uiTranscriptionPending = true;
+            }
+            updateButtonAppearance();
+            pollStatus();
         }
-        pollStatus();
     } catch (error) {
         showStatus('Failed: ' + error, 'error');
     }

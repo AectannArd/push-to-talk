@@ -535,6 +535,7 @@ fn toggle_recording_inner(state: &AppState) {
         tracing::info!("🛑 Stopping recording");
     } else {
         if let Some(handle) = state.voice_service.lock().unwrap().as_ref() {
+            handle.state.should_paste.store(false, Ordering::Relaxed);
             let _ = handle.start_recording();
         }
         tracing::info!("🎤 Starting recording");
@@ -595,6 +596,7 @@ fn handle_shortcut_event(event: tauri_plugin_global_shortcut::ShortcutEvent) {
         ShortcutState::Pressed => {
             if !state.is_recording.load(Ordering::SeqCst) {
                 if let Some(handle) = state.voice_service.lock().unwrap().as_ref() {
+                    handle.state.should_paste.store(true, Ordering::Relaxed);
                     let _ = handle.start_recording();
                 }
                 tracing::info!("🎤 Hotkey press — starting recording");

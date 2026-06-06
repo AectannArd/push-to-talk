@@ -97,16 +97,21 @@ input:focus, select:focus {
     word-break: break-word;
 }
 
-/* Recording Control */
-.recording-row {
-    display: flex; gap: 15px; align-items: flex-end;
-    margin: 20px 0;
+/* Common section two-column layout */
+.common-grid {
+    display: grid; grid-template-columns: 1fr 280px;
+    gap: 20px; align-items: start;
 }
-.recording-row .btn {
-    flex: 0 0 auto; min-width: 200px;
+.common-left { min-width: 0; }
+.common-right {
+    display: flex; flex-direction: column; gap: 12px;
+    padding-top: 4px;
 }
-.recording-row .transcription-box {
-    flex: 1; min-width: 0;
+.common-right .btn {
+    width: 100%; padding: 14px 20px; font-size: 15px; font-weight: 600;
+}
+.common-right .transcription-box {
+    flex: 1; min-height: 80px;
 }
 
 /* Transcription Box */

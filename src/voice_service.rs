@@ -23,6 +23,7 @@ pub struct VoiceServiceHandle {
 
 pub struct VoiceServiceInner {
     pub is_recording: Arc<AtomicBool>,
+    pub should_paste: Arc<AtomicBool>,
     pub last_transcription: Arc<Mutex<Option<String>>>,
     pub transcriber: Arc<Mutex<crate::transcriber::Transcriber>>,
     recording: Arc<Mutex<Option<Recording>>>,
@@ -64,6 +65,7 @@ impl VoiceServiceHandle {
 
         let state = Arc::new(VoiceServiceInner {
             is_recording: app_is_recording,
+            should_paste: Arc::new(AtomicBool::new(false)),
             last_transcription,
             transcriber: tr.clone(),
             recording,
@@ -172,6 +174,7 @@ fn run_service_loop(
     // Transcription thread
     let tr_clone = state.transcriber.clone();
     let last_transcription = state.last_transcription.clone();
+    let should_paste = state.should_paste.clone();
     let _tx_clone = state.tx.clone();
     let _transcribe_thread = thread::spawn(move || {
         for audio in rx {
@@ -181,14 +184,16 @@ fn run_service_loop(
                 }
                 Ok(text) => {
                     info!("📝 \"{}\"", text);
-                    // Update last transcription
+                    // Update last transcription (always)
                     *last_transcription.lock().unwrap() = Some(text.clone());
-                    copy_to_clipboard(&text);
-                    info!("✅ Text copied to clipboard");
-                    thread::sleep(Duration::from_millis(100)); // Give clipboard time to settle
-                    info!("⌨️ Attempting to paste via Cmd+V...");
-                    paste_from_clipboard();
-                    info!("✅ Paste completed");
+                    // Copy & paste only when triggered by global hotkey
+                    if should_paste.load(Ordering::Relaxed) {
+                        copy_to_clipboard(&text);
+                        info!("✅ Text copied to clipboard");
+                        thread::sleep(Duration::from_millis(100));
+                        paste_from_clipboard();
+                        info!("✅ Paste completed");
+                    }
                 }
                 Err(e) => error!("❌ Transcription error: {}", e),
             }

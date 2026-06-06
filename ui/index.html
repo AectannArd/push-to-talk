@@ -37,26 +37,30 @@
                 <!-- ── Common: frequently-used controls ── -->
                 <div class="section-title">🎛️ Common</div>
 
-                <!-- Recording Control and Last Transcription -->
-                <div class="recording-row">
-                    <button type="button" class="btn btn-primary" id="toggleBtn">🎤 Start Recording</button>
-                    <div class="transcription-box">
-                        <span id="lastTranscription" class="transcription-value">—</span>
+                <div class="common-grid">
+                    <!-- Left column: model list + device -->
+                    <div class="common-left">
+                        <div class="form-group">
+                            <label>Available Models</label>
+                            <div id="modelList" class="model-list">
+                                <p class="model-list-placeholder">Scanning model directories...</p>
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <label for="deviceSelect">Audio Input Device</label>
+                            <select id="deviceSelect" name="deviceSelect">
+                                <option value="">Use default device</option>
+                            </select>
+                        </div>
                     </div>
-                </div>
 
-                <div class="form-group">
-                    <label>Available Models</label>
-                    <div id="modelList" class="model-list">
-                        <p class="model-list-placeholder">Scanning model directories...</p>
+                    <!-- Right column: recording button + transcription -->
+                    <div class="common-right">
+                        <button type="button" class="btn btn-primary" id="toggleBtn">🎤 Start Recording</button>
+                        <div class="transcription-box">
+                            <span id="lastTranscription" class="transcription-value">—</span>
+                        </div>
                     </div>
-                </div>
-
-                <div class="form-group">
-                    <label for="deviceSelect">Audio Input Device</label>
-                    <select id="deviceSelect" name="deviceSelect">
-                        <option value="">Use default device</option>
-                    </select>
                 </div>
 
                 <!-- ── Audio & Transcription: hotkey + language ── -->
