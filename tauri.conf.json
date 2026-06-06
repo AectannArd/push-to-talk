@@ -31,8 +31,16 @@
     "active": true,
     "targets": "all",
     "icon": [
-      "icons/icon.png"
-    ]
+      "icons/icon.png",
+      "icons/icon.ico"
+    ],
+    "windows": {
+      "nsis": {
+        "installMode": "currentUser",
+        "installerIcon": "icons/icon.ico",
+        "startMenuFolder": "Push-to-Talk"
+      }
+    }
   },
   "plugins": {
     "shell": {
