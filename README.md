@@ -39,9 +39,12 @@ curl -Lo ~/.push-to-talk/models/ggml-base.bin \
 # 2. Build (Metal + CoreML acceleration, no extra toolchain needed)
 cargo build --release
 
-# 3. Grant Accessibility permission (required for global hotkey)
+# 3. Grant Accessibility permission (required for paste functionality)
 #    System Preferences → Privacy & Security → Accessibility
 #    Add the push-to-talk binary
+#    
+#    ⚠️ Important: After each rebuild or reinstallation, macOS resets
+#    Accessibility permissions. You must re-add the new binary to the list.
 
 # 4. Run
 ./target/release/push-to-talk

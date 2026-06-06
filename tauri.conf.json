@@ -1,0 +1,42 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "Push-to-Talk",
+  "version": "0.1.0",
+  "identifier": "ru.tcsbank.push-to-talk",
+  "build": {
+    "frontendDist": "./ui"
+  },
+  "app": {
+    "withGlobalTauri": true,
+    "windows": [
+      {
+        "label": "main",
+        "title": "Push-to-Talk",
+        "width": 750,
+        "height": 650,
+        "resizable": true,
+        "center": true,
+        "visible": true,
+        "focus": true,
+        "closable": true,
+        "minimizable": true,
+        "maximizable": true
+      }
+    ],
+    "security": {
+      "csp": null
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": "all",
+    "icon": [
+      "icons/icon.png"
+    ]
+  },
+  "plugins": {
+    "shell": {
+      "open": true
+    }
+  }
+}

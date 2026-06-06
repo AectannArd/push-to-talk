@@ -1,0 +1,136 @@
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    min-height: 100vh;
+    padding: 20px;
+    color: #333;
+}
+.container {
+    max-width: 700px;
+    margin: 0 auto;
+    background: white;
+    border-radius: 16px;
+    padding: 30px;
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+}
+h1 { text-align: center; color: #667eea; margin-bottom: 10px; font-size: 28px; }
+.subtitle { text-align: center; color: #888; margin-bottom: 25px; font-size: 14px; }
+.status-bar {
+    display: flex; align-items: center; justify-content: center;
+    gap: 10px; padding: 15px; background: #f8f9fa;
+    border-radius: 12px; margin-bottom: 25px;
+}
+.status-indicator {
+    width: 12px; height: 12px; border-radius: 50%;
+    background: #ccc; transition: background 0.3s;
+}
+.status-indicator.recording { background: #ff4444; animation: pulse 1s infinite; }
+.status-indicator.running { background: #44cc44; }
+@keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
+.status-text { font-weight: 600; color: #555; }
+.control-buttons { display: flex; gap: 12px; margin-bottom: 25px; }
+.btn {
+    flex: 1; padding: 14px 24px; border: none; border-radius: 8px;
+    font-size: 15px; font-weight: 600; cursor: pointer;
+    transition: transform 0.1s, box-shadow 0.2s;
+}
+.btn:active { transform: scale(0.98); }
+.btn-primary { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; }
+.btn-danger { background: #ff4444; color: white; }
+.btn-secondary { background: #f0f0f0; color: #666; }
+.form-group { margin-bottom: 20px; }
+label { display: block; margin-bottom: 6px; font-weight: 600; color: #444; font-size: 14px; }
+input, select {
+    width: 100%; padding: 12px 14px; border: 2px solid #e0e0e0;
+    border-radius: 8px; font-size: 14px; height: 44px;
+    transition: border-color 0.2s, box-shadow 0.2s;
+}
+input:focus, select:focus {
+    outline: none; border-color: #667eea;
+    box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.2);
+}
+.form-group input, .form-group select {
+    min-width: 0;
+}
+.form-row .form-group input, .form-row .form-group select {
+    width: 100%;
+}
+.hint { font-size: 12px; color: #888; margin-top: 4px; }
+.section-title {
+    font-size: 16px; font-weight: 700; color: #667eea;
+    margin: 25px 0 15px 0; padding-bottom: 8px;
+    border-bottom: 2px solid #f0f0f0;
+}
+.config-title {
+    font-size: 20px; font-weight: 700; color: #333;
+    margin: 0 0 20px 0; text-align: center;
+}
+.status-message {
+    text-align: center; padding: 12px; border-radius: 8px;
+    margin-bottom: 20px; font-weight: 500; display: none;
+}
+.status-success { background: #d4edda; color: #155724; display: block; }
+.status-error { background: #f8d7da; color: #721c24; display: block; }
+
+/* Status Section */
+.status-section {
+    background: #f8f9fa; border-radius: 12px;
+    padding: 20px; margin-bottom: 25px;
+}
+.session-info {
+    display: grid; grid-template-columns: 1fr 1fr;
+    gap: 12px; margin-top: 15px;
+}
+.session-item {
+    display: flex; flex-direction: column;
+    background: white; padding: 12px;
+    border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+}
+.session-item.full-width { grid-column: 1 / -1; }
+.session-label {
+    font-size: 11px; color: #888; text-transform: uppercase;
+    letter-spacing: 0.5px; margin-bottom: 4px;
+}
+.session-value {
+    font-size: 14px; color: #333; font-weight: 500;
+    word-break: break-word;
+}
+
+/* Recording Control */
+.recording-row {
+    display: flex; gap: 15px; align-items: flex-end;
+    margin: 20px 0;
+}
+.recording-row .btn {
+    flex: 0 0 auto; min-width: 200px;
+}
+.recording-row .transcription-box {
+    flex: 1; min-width: 0;
+}
+
+/* Transcription Box */
+.transcription-box {
+    background: #f8f9fa; border: 1px solid #e0e0e0;
+    border-radius: 8px; padding: 12px 14px;
+    min-height: 44px; flex: 1;
+}
+.transcription-value {
+    font-size: 14px; color: #333;
+    word-break: break-word;
+}
+
+/* Form layout */
+.form-row {
+    display: grid; grid-template-columns: 1fr 1fr;
+    gap: 15px;
+}
+.model-list {
+    border: 1px solid #e0e0e0; border-radius: 8px;
+    padding: 12px; background: #f8f9fa; min-height: 60px;
+}
+.model-list-placeholder { color: #888; margin: 0; }
+.model-download-row {
+    display: flex; gap: 8px; align-items: flex-end;
+}
+.model-select { flex: 1; min-width: 0; }

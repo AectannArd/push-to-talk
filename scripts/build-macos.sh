@@ -169,6 +169,8 @@ echo ""
 echo "   2. Accessibility (for typing transcribed text)"
 echo "      System Preferences → Privacy & Security → Accessibility"
 echo "      Add push-to-talk"
+echo "      ⚠️  After each reinstallation or update, you must re-grant"
+echo "          this permission — macOS resets it for new binaries."
 echo ""
 echo "   3. Microphone (for audio recording)"
 echo "      System Preferences → Privacy & Security → Microphone"
@@ -215,6 +217,9 @@ Required for typing transcribed text into the active window.
 1. Open **System Preferences** → **Privacy & Security** → **Accessibility**
 2. Click the lock to make changes
 3. Click **+** and add \`push-to-talk\` from \`/Applications/$APP_NAME.app\`
+
+> **⚠️ Important:** After each reinstallation or update, macOS resets Accessibility
+> permissions. You must re-grant this permission for the new binary.
 
 ### 3. Microphone (Audio Recording)
 

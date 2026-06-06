@@ -10,18 +10,17 @@ pub fn default_path() -> PathBuf {
     home.join(".push-to-talk").join("config.toml")
 }
 
-fn default_model_dirs() -> Vec<String> {
+pub fn default_model_dirs() -> Vec<String> {
     // Default: ~/.push-to-talk/models/ (next to config.toml) + current dir
     let home = std::env::var("USERPROFILE")
         .or_else(|_| std::env::var("HOME"))
         .map(PathBuf::from)
         .unwrap_or_else(|_| PathBuf::from("."));
-    vec![
-        home.join(".push-to-talk")
-            .join("models")
-            .to_string_lossy()
-            .to_string(),
-    ]
+    vec![home
+        .join(".push-to-talk")
+        .join("models")
+        .to_string_lossy()
+        .to_string()]
 }
 
 fn default_hotkey() -> String {
@@ -44,7 +43,7 @@ fn default_log_format() -> String {
     "text".into()
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Config {
     /// Audio device system ID (e.g., "coreaudio:device_123"). None = prompt at startup.
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -85,6 +84,10 @@ pub struct Config {
     /// Log output format: "text" or "json".
     #[serde(default = "default_log_format")]
     pub log_format: String,
+
+    /// Window visibility state: true = hidden in tray, false = show window.
+    #[serde(default)]
+    pub window_hidden: bool,
 }
 
 impl Default for Config {
@@ -100,6 +103,7 @@ impl Default for Config {
             log_level: default_log_level(),
             log_retention_hours: default_retention_hours(),
             log_format: default_log_format(),
+            window_hidden: false,
         }
     }
 }

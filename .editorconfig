@@ -42,3 +42,21 @@ indent_size = 2
 [.gitignore, .gitattributes]
 indent_style = space
 indent_size = 2
+
+# JavaScript files
+[*.js]
+indent_style = space
+indent_size = 4
+charset = utf-8
+
+# HTML files
+[*.html]
+indent_style = space
+indent_size = 4
+charset = utf-8
+
+# CSS files
+[*.css]
+indent_style = space
+indent_size = 4
+charset = utf-8
