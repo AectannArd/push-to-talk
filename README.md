@@ -157,13 +157,11 @@ To build without GPU acceleration, remove the platform GPU features from
 
 ```
 src/
-├── main.rs           CLI args, config orchestration, hotkey loop, transcription dispatch
+├── main.rs           Entry point, Tauri commands, global state, logging
 ├── config.rs         Config struct, load/save, default path
-├── hotkey.rs         Hotkey string parser ("Ctrl+Shift+T" → keys + modifiers)
-├── indicator.rs      Console recording indicator (terminal title + inline marker)
 ├── recorder.rs       Audio capture (cpal), device enumeration, format conversion
-├── transcriber.rs    Whisper transcription (whisper-rs / CUDA / log_backend)
-└── tray.rs           System tray icon with recording state tooltip (Windows)
+├── transcriber.rs    Whisper transcription (whisper-rs, platform GPU backends)
+└── voice_service.rs  Background service orchestrator, clipboard, transcription loop
 ```
 
 ## Contributing

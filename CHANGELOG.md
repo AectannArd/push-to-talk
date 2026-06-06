@@ -16,7 +16,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 - Config now stores `device_id` (system ID) instead of just device name
-- UI extracted to separate module (`src/ui.rs`)
+- UI migrated to Tauri WebView frontend (`ui/`)
 - Improved error messages and user feedback
 
 ### Fixed

@@ -281,13 +281,11 @@ Include:
 
 ```
 src/
-├── main.rs        # Application entry point, event loop
-├── config.rs      # Configuration management (TOML)
-├── recorder.rs    # Audio recording with cpal
-├── transcriber.rs # Whisper.cpp integration
-├── hotkey.rs      # Global hotkey handling with rdev
-├── indicator.rs   # UI indicator window
-└── ui.rs          # Interactive CLI wizard
+├── main.rs           # Entry point, Tauri commands, global state, logging
+├── config.rs         # Configuration management (TOML)
+├── recorder.rs       # Audio recording with cpal
+├── transcriber.rs    # Whisper.cpp integration
+└── voice_service.rs  # Background service orchestrator, clipboard, transcription loop
 ```
 
 ## Release Process
