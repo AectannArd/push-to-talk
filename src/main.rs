@@ -600,7 +600,6 @@ fn main() {
         ])
         .setup(move |app| {
             // Prevent app from exiting when window is closed (tray app behavior)
-            #[cfg(target_os = "macos")]
             {
                 let config_clone = app_state_arc.config.clone();
                 if let Some(window) = app.get_webview_window("main") {
@@ -636,7 +635,6 @@ fn main() {
             }
 
             // Restore window state from config
-            #[cfg(target_os = "macos")]
             {
                 let config = app_state_arc.config.lock().unwrap();
                 let window_hidden = config.window_hidden;
@@ -674,8 +672,7 @@ fn main() {
                 }
             }
 
-            // Window event handler - hide instead of close
-            #[cfg(target_os = "macos")]
+            // System tray with menu (Show / Toggle Recording / Quit)
             {
                 use tauri::menu::{Menu, MenuItem};
                 use tauri::tray::TrayIconBuilder;
