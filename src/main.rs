@@ -42,6 +42,7 @@ pub struct DeviceDto {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ModelDto {
     pub filename: String,
+    pub path: String,
     pub size: String,
 }
 
@@ -321,6 +322,7 @@ fn scan_models(model_search_dirs: Vec<String>) -> Result<Vec<ModelDto>, String> 
 
                         models.push(ModelDto {
                             filename: name.to_string(),
+                            path: path.to_string_lossy().to_string(),
                             size,
                         });
                     }

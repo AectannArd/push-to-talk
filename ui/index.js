@@ -37,6 +37,7 @@ let devicesLoaded = false;
 let isInitialLoad = true;
 let isRecording = false;
 let isServiceRunning = false;
+let selectedModel = null;  // full path to the selected ggml-*.bin file (from ModelDto.path)
 
 waitForTauri()
     .then(inv => {
@@ -135,7 +136,7 @@ function buildConfigFromForm() {
         language: document.getElementById('language').value.trim() || null,
         device_id: deviceSelect.value || null,
         device_name: deviceSelect.selectedOptions[0]?.textContent?.replace(' (default)', '').split(' - ')[0] || null,
-        model: null,
+        model: selectedModel || null,
         model_search_dirs: document.getElementById('modelSearchDirs').value.split(',').map(s => s.trim()).filter(s => s.length > 0),
         log_dir: document.getElementById('logDir').value.trim() || 'logs',
         log_level: document.getElementById('logLevel').value,
@@ -245,7 +246,19 @@ function updateStatusUI(status) {
     }
 }
 
+// Select a model for transcription and auto-save
+function selectModel(path) {
+    selectedModel = path;
+    // Re-render to update selection markers
+    document.getElementById('scanModelsBtn').click();
+    // Auto-save the new model selection
+    autoSaveConfig();
+}
+
 function fillConfigForm(config) {
+    // Set selected model from config (full path)
+    selectedModel = config.model || null;
+
     document.getElementById('hotkey').value = config.hotkey || '';
     document.getElementById('language').value = config.language || '';
     if (config.device_id) {
@@ -313,12 +326,31 @@ document.getElementById('scanModelsBtn').addEventListener('click', async () => {
         if (models.length === 0) {
             modelListEl.innerHTML = '<p style="color: #888;">No models found. Download a model or update search directories.</p>';
         } else {
-            modelListEl.innerHTML = models.map(m =>
-                `<div style="padding: 8px; margin: 4px 0; background: white; border-radius: 4px; display: flex; justify-content: space-between; align-items: center;">
-                            <span style="font-family: monospace; font-size: 13px;">${m.filename}</span>
-                            <span style="color: #888; font-size: 12px;">${m.size}</span>
-                        </div>`
-            ).join('');
+            modelListEl.innerHTML = models.map(m => {
+                const isSelected = selectedModel === m.path;
+                const radio = isSelected ? '●' : '○';
+                return `<div class="model-item${isSelected ? ' model-item-selected' : ''}"
+                            data-path="${m.path}"
+                            title="${m.path}">
+                            <span class="model-radio">${radio}</span>
+                            <span class="model-name">${m.filename}</span>
+                            <span class="model-size">${m.size}</span>
+                        </div>`;
+            }).join('');
+
+            // Add click handlers to model items
+            modelListEl.querySelectorAll('.model-item').forEach(item => {
+                item.addEventListener('click', function() {
+                    selectModel(this.dataset.path);
+                });
+            });
+        }
+
+        // Filter download dropdown: hide models already in the repository
+        const foundFilenames = new Set(models.map(m => m.filename));
+        const downloadSelect = document.getElementById('modelToDownload');
+        for (const option of downloadSelect.options) {
+            option.hidden = foundFilenames.has(option.value);
         }
     } catch (error) {
         modelListEl.innerHTML = `<p style="color: #ff4444;">Error: ${error}</p>`;
@@ -330,6 +362,12 @@ document.getElementById('downloadModelBtn').addEventListener('click', async () =
     const select = document.getElementById('modelToDownload');
     const modelName = select.value;
     const downloadBtn = document.getElementById('downloadModelBtn');
+
+    // Guard: don't re-download models already in the repository
+    if (select.selectedOptions[0]?.hidden) {
+        showStatus(`${modelName} is already downloaded`, 'error');
+        return;
+    }
 
     downloadBtn.disabled = true;
     downloadBtn.textContent = '⏳ Downloading...';

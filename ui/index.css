@@ -127,9 +127,22 @@ input:focus, select:focus {
 }
 .model-list {
     border: 1px solid #e0e0e0; border-radius: 8px;
-    padding: 12px; background: #f8f9fa; min-height: 60px;
+    padding: 8px; background: #f8f9fa; min-height: 60px;
+    max-height: 200px; overflow-y: auto;
 }
-.model-list-placeholder { color: #888; margin: 0; }
+.model-list-placeholder { color: #888; margin: 0; padding: 4px; }
+.model-item {
+    display: flex; align-items: center; gap: 8px;
+    padding: 8px 10px; margin: 2px 0;
+    background: white; border-radius: 6px; cursor: pointer;
+    border: 1px solid transparent;
+    transition: border-color 0.15s, background 0.15s;
+}
+.model-item:hover { border-color: #667eea; background: #f0f2ff; }
+.model-item-selected { border-color: #667eea; background: #eef0ff; }
+.model-radio { font-size: 12px; color: #667eea; flex: 0 0 auto; }
+.model-name { font-family: monospace; font-size: 13px; flex: 1; }
+.model-size { color: #888; font-size: 12px; flex: 0 0 auto; }
 .model-download-row {
     display: flex; gap: 8px; align-items: flex-end;
 }
