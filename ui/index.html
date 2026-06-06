@@ -34,17 +34,8 @@
         <div class="config-section">
             <h2 class="config-title">⚙️ Configuration</h2>
             <form id="configForm">
-                <div class="section-title">🎤 Audio & Transcription</div>
-                <div class="form-group">
-                    <label for="hotkey">Hotkey</label>
-                    <input type="text" id="hotkey" name="hotkey" placeholder="Ctrl+Shift+T">
-                    <div class="hint">Format: Mod+Mod+Key (e.g., Ctrl+Shift+T, Alt+T)</div>
-                </div>
-                <div class="form-group">
-                    <label for="language">Language</label>
-                    <input type="text" id="language" name="language" placeholder="auto">
-                    <div class="hint">Use "auto" for automatic detection, or specify: ru, en, de, etc.</div>
-                </div>
+                <!-- ── Common: frequently-used controls ── -->
+                <div class="section-title">🎛️ Common</div>
                 <div class="form-group">
                     <label for="deviceSelect">Audio Input Device</label>
                     <select id="deviceSelect" name="deviceSelect">
@@ -60,12 +51,6 @@
                     </div>
                 </div>
 
-                <div class="section-title">🧠 Whisper Model</div>
-                <div class="form-group">
-                    <label for="modelSearchDirs">Model Search Directories</label>
-                    <input type="text" id="modelSearchDirs" name="modelSearchDirs" placeholder="~/.push-to-talk/models">
-                    <div class="hint">Comma-separated list of directories</div>
-                </div>
                 <div class="form-group">
                     <label>Available Models</label>
                     <div id="modelList" class="model-list">
@@ -83,6 +68,28 @@
                     <div class="hint">Downloads from Hugging Face to the first directory in Model Search Directories</div>
                 </div>
 
+                <!-- ── Audio & Transcription: hotkey + language ── -->
+                <div class="section-title">🎤 Audio & Transcription</div>
+                <div class="form-group">
+                    <label for="hotkey">Hotkey</label>
+                    <input type="text" id="hotkey" name="hotkey" placeholder="Ctrl+Shift+T">
+                    <div class="hint">Format: Mod+Mod+Key (e.g., Ctrl+Shift+T, Alt+T)</div>
+                </div>
+                <div class="form-group">
+                    <label for="language">Language</label>
+                    <input type="text" id="language" name="language" placeholder="auto">
+                    <div class="hint">Use "auto" for automatic detection, or specify: ru, en, de, etc.</div>
+                </div>
+
+                <!-- ── Whisper Model: search dirs ── -->
+                <div class="section-title">🧠 Whisper Model</div>
+                <div class="form-group">
+                    <label for="modelSearchDirs">Model Search Directories</label>
+                    <input type="text" id="modelSearchDirs" name="modelSearchDirs" placeholder="~/.push-to-talk/models">
+                    <div class="hint">Comma-separated list of directories</div>
+                </div>
+
+                <!-- ── Logging ── -->
                 <div class="section-title">📝 Logging</div>
                 <div class="form-row">
                     <div class="form-group">
