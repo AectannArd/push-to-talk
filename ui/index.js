@@ -196,9 +196,7 @@ async function loadConfig() {
             // Auto-scan models on first load
             if (!modelsScanned) {
                 modelsScanned = true;
-                setTimeout(() => {
-                    document.getElementById('scanModelsBtn').click();
-                }, 500);
+                setTimeout(() => scanModels(), 500);
             }
         }
         isInitialLoad = false; // Initial load complete, enable auto-save
@@ -259,7 +257,7 @@ function updateStatusUI(status) {
 function selectModel(path) {
     selectedModel = path;
     // Re-render to update selection markers
-    document.getElementById('scanModelsBtn').click();
+    scanModels();
     // Auto-save the new model selection
     autoSaveConfig();
 }
@@ -323,8 +321,8 @@ document.addEventListener('keydown', async (e) => {
     }
 });
 
-// Scan for models button
-document.getElementById('scanModelsBtn').addEventListener('click', async () => {
+// Scan model directories and refresh the UI. Returns the found models.
+async function scanModels() {
     const modelListEl = document.getElementById('modelList');
     modelListEl.innerHTML = '<p style="color: #888;">Scanning...</p>';
 
@@ -366,10 +364,18 @@ document.getElementById('scanModelsBtn').addEventListener('click', async () => {
                 `<option value="${m.name}">${m.desc}</option>`
             ).join('');
         }
+
+        return models;
     } catch (error) {
         modelListEl.innerHTML = `<p style="color: #ff4444;">Error: ${error}</p>`;
+        return [];
     }
-});
+}
+
+// Background polling: check for model directory changes every 5 seconds
+setInterval(() => {
+    scanModels();
+}, 5000);
 
 // Download model button
 document.getElementById('downloadModelBtn').addEventListener('click', async () => {
@@ -391,8 +397,8 @@ document.getElementById('downloadModelBtn').addEventListener('click', async () =
         const targetDir = config.model_search_dirs[0] || '~/.push-to-talk/models';
         await invoke('download_model', { modelName, targetDir });
         showStatus(`Model ${modelName} downloaded successfully!`, 'success');
-        // Auto-scan after download
-        document.getElementById('scanModelsBtn').click();
+        // Immediate re-scan to show the new model and refresh the dropdown
+        scanModels();
     } catch (error) {
         showStatus('Download failed: ' + error, 'error');
     } finally {
