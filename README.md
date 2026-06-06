@@ -1,32 +1,46 @@
-# push-to-talk 🎙
+# Push-to-Talk 🎤
 
 [![Rust](https://img.shields.io/badge/Rust-1.85+-orange.svg?logo=rust)](https://www.rust-lang.org)
 [![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
 [![Platform](https://img.shields.io/badge/Platform-macOS%20%7C%20Linux%20%7C%20Windows-lightgrey.svg)](#requirements)
-[![Release](https://img.shields.io/github/v/release/AectannArd/push-to-talk?logo=github)](https://github.com/AectannArd/push-to-talk/releases)
-[![CI](https://img.shields.io/github/actions/workflow/status/AectannArd/push-to-talk/release.yml?logo=github&label=build)](https://github.com/AectannArd/push-to-talk/actions)
 
-Push-to-talk voice input for the CLI. Hold a hotkey, speak, release — text is
-typed directly into the active window.
-
-> Rust, Whisper.cpp (CUDA), cpal, rdev, enigo.
+Desktop push-to-talk voice input. Press a global hotkey, speak, release —
+text is transcribed locally via Whisper and pasted into the active window.
+Built with **Rust**, **Tauri v2**, and **Whisper.cpp**.
 
 ## Quick start
 
 ### Windows
 
+1. Download a Whisper model (or use the in-app downloader)
+   ```powershell
+   mkdir -p $env:USERPROFILE\.push-to-talk\models
+   curl -Lo $env:USERPROFILE\.push-to-talk\models\ggml-base.bin `
+     https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-base.bin
+   ```
+
+2. Build (requires CUDA Toolkit 12+ + `CUDA_PATH`)
+   ```powershell
+   cargo build --release
+   ```
+
+3. Run
+   ```powershell
+   .\target\release\push-to-talk.exe
+   ```
+
+### Installer (Windows)
+
 ```powershell
-# 1. Download a Whisper model
-mkdir -p ~/.push-to-talk/models
-curl -Lo ~/.push-to-talk/models/ggml-base.bin `
-  https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-base.bin
-
-# 2. Build (requires CUDA Toolkit + CUDA_PATH)
-cargo build --release
-
-# 3. Run
-.\target\release\push-to-talk.exe
+cargo tauri build
 ```
+
+Produces two installers:
+- **NSIS** — `target\release\bundle\nsis\Push-to-Talk_0.1.0_x64-setup.exe`
+- **MSI** — `target\release\bundle\msi\Push-to-Talk_0.1.0_x64_en-US.msi`
+
+NSIS and WiX are downloaded automatically by Tauri — no manual installation needed.
+The installer configures Start Menu shortcuts and registers an uninstaller.
 
 ### macOS (Apple Silicon / M-series)
 
@@ -36,109 +50,122 @@ mkdir -p ~/.push-to-talk/models
 curl -Lo ~/.push-to-talk/models/ggml-base.bin \
   https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-base.bin
 
-# 2. Build (Metal + CoreML acceleration, no extra toolchain needed)
+# 2. Build (Metal + CoreML acceleration, no extra toolchain)
 cargo build --release
 
-# 3. Grant Accessibility permission (required for paste functionality)
+# 3. Grant Accessibility permission (required for auto-paste)
 #    System Preferences → Privacy & Security → Accessibility
-#    Add the push-to-talk binary
-#    
-#    ⚠️ Important: After each rebuild or reinstallation, macOS resets
-#    Accessibility permissions. You must re-add the new binary to the list.
+#    Add push-to-talk.app to the list
 
 # 4. Run
 ./target/release/push-to-talk
 ```
 
-## CLI flags
-
-| Flag | Description |
-|------|-------------|
-| `--config <path>` | Override config file location (default: `~/.push-to-talk/config.toml`) |
-| `--non-interactive` | Skip interactive setup; exit with error if model is missing |
-| `--debug-voice-record` | Save each recording as a timestamped WAV for debugging |
-
 ## Usage
 
-```
-╔══════════════════════════════════════════╗
-║   🎙  Push-to-Talk CLI                  ║
-║   Hold hotkey, speak, release.          ║
-║   Text → auto-type → verify → Enter     ║
-╚══════════════════════════════════════════╝
-```
+### Global hotkey (push-to-talk anywhere)
 
-1. Start the binary — config review appears (skip with Enter)
-2. Hold the configured hotkey (default: `Ctrl+Shift+T`)
-3. Speak into your microphone
-4. Release — Whisper transcribes, text is typed into the active window
-5. Verify and hit **Enter**
+Press the configured hotkey (default: `Insert`), speak into your microphone,
+release — Whisper transcribes locally and the text is **automatically pasted**
+into the currently focused application.
 
-**Indicators:** console prints `🔴 ● RECORDING ● 🔴` + terminal title changes;
-system tray icon tooltip shows recording state.
+On Windows, `Ctrl+V` is simulated via `keybd_event`. On macOS, `Cmd+V` is
+sent via AppleScript.
+
+### UI recording button
+
+Click **🎤 Start Recording** in the configuration window, speak, click **⏹ Stop**.
+The transcription appears in the text field next to the button — no clipboard
+interaction, no auto-paste.
+
+### System tray
+
+Close the window → app minimizes to tray. Right-click the tray icon:
+
+- **Configure** — show the configuration window
+- **Quit** — exit the application
+
+The app stays resident in the tray, listening for the global hotkey.
 
 ## Configuration
 
-Config file: `~/.push-to-talk/config.toml` (TOML format).
-All fields are optional — defaults are used if absent.
+All settings are managed through the GUI. Config file:
+`~/.push-to-talk/config.toml` (TOML).
 
 ```toml
-device = "2"                  # audio input device (1-based index or substring)
-language = "auto"             # Whisper language: auto, ru, en, ...
-model = "/path/to/ggml.bin"   # explicit model path (skips directory scan)
-model_search_dirs = [         # dirs scanned for ggml-*.bin if model is not set
-    "~/.push-to-talk/models",
-]
-hotkey = "Ctrl+Shift+T"       # Mod+Mod+Key format (Ctrl, Shift, Alt, Win)
-log_dir = "logs"              # log directory (env vars expanded: %APPDATA%, $HOME)
-log_level = "error"           # trace, debug, info, warn, error
-log_format = "text"           # text or json
-log_retention_hours = 2       # rotated log files older than this are deleted
+device_id = "wasapi:{...}"           # audio input device system ID
+device_name = "Microphone Array"     # human-readable device name
+language = "auto"                    # "auto", "ru", "en", ...
+model = "D:\\models\\ggml-medium.bin" # explicit model path
+model_search_dirs = ["D:\\development\\models"]
+hotkey = "Insert"                    # global shortcut
+log_dir = "C:\\Users\\...\\logs"
+log_level = "warn"                   # trace, debug, info, warn, error
+log_format = "text"                  # text or json
+log_retention_hours = 1
+window_hidden = false                # start minimized to tray
 ```
 
-### Interactive setup
+### Configuration panels
 
-On each launch (unless `--non-interactive`), current config is displayed and you
-can edit any field:
+| Section | Contents |
+|---------|----------|
+| 🎛️ Common | Recording button + transcription, available models (clickable radio buttons), audio input device |
+| 🎤 Audio & Transcription | Hotkey, language |
+| 🧠 Whisper Model | Model search directories, download model dropdown |
+| 📝 Logging | Log directory, level, format, retention |
+
+### Model management
+
+- **Auto-scanning** — model directories are scanned every 5 seconds in the background
+- **Selection** — click a model in the list (○/● radio) to use it for transcription
+- **Download** — choose a model from the dropdown and click ⬇️ Download; already-downloaded models are hidden from the list
+- **Resolution** — `model` field in config → scan `model_search_dirs` → first match wins
+
+### Language switching
+
+Changing the language in the UI takes effect **immediately** — on the very next
+transcription, without restarting the app.
+
+## Architecture
 
 ```
-┌─ Current config ───────────────────────────────────
-│ device:             2
-│ language:           auto
-│ model:              D:\models\ggml-large-v3.bin
-│ hotkey:             Ctrl+Shift+T
-│ model_search_dirs:  ["~/.push-to-talk/models"]
-│ log_dir:            %APPDATA%\push-to-talk\logs
-│ log_level:          error
-│ log_format:         text
-│ log_retention:      2h
-└─────────────────────────────────────────────────────
-
-✏  Edit config? [y/N]:
+src/
+├── main.rs           Tauri entry point, IPC commands, global state, tray, logging
+├── config.rs         TOML config at ~/.push-to-talk/config.toml
+├── recorder.rs       Audio capture via cpal (i16 on Windows, f32 on macOS/Linux)
+├── transcriber.rs    Whisper.cpp wrapper (whisper-rs), greedy decoding
+└── voice_service.rs  Background orchestrator: recorder + transcriber + clipboard
+ui/
+├── index.html        Tauri WebView frontend
+├── index.js          Configuration UI, model scanning, polling
+└── index.css         Styling
 ```
 
-If the configured model file is missing, setup enters **force mode**:
-1. First asks for model search directories
-2. Scans those directories
-3. Shows available models, lets you pick one
-4. Then offers to review remaining settings
+## Platform support
 
-### Model discovery
+| Feature | Windows | macOS | Linux |
+|---------|---------|-------|-------|
+| GPU acceleration | CUDA | Metal + CoreML | CPU only |
+| Audio format | i16 (WASAPI) | f32 (CoreAudio) | f32 (ALSA/Pulse) |
+| Auto-paste | `keybd_event` Ctrl+V | AppleScript Cmd+V | Manual |
+| System tray | ✓ | ✓ | ✓ |
+| Installer | NSIS + MSI | DMG | — |
 
-Resolution order:
-1. `model` field in config (exact path)
-2. `WHISPER_MODEL` env var (exact path)
-3. Scan `model_search_dirs` recursively for `ggml-*.bin` (first match wins)
+## Device resilience
 
-On first run, the discovered model path is saved to config automatically.
+If the configured audio device disconnects while recording:
+- Recording is **force-stopped immediately**
+- The app **switches to the first available device** automatically
+- The new device is persisted to config
+- The user must press the hotkey again to start a new recording
 
 ## Logging
 
-- **Console:** colorised output to stderr at the configured level
-- **Files:** `log_dir/push-to-talk.YYYY-MM-DD-HH-mm.{log,json}` with 1‑minute rotation
-- **Retention:** files older than `log_retention_hours` are deleted (background cleanup every 10 min)
-- **Env vars in paths:** `%VAR%` (Windows) and `$VAR` / `${VAR}` (Unix) are expanded
-- **Whisper output:** routed through `log::debug!` — visible only at `debug` level
+- **Files:** `log_dir/push-to-talk.YYYY-MM-DD-HH-mm.log` with 1-minute rotation
+- **Retention:** files older than `log_retention_hours` are cleaned up hourly
+- **Levels:** default `warn` — shows hotkey registration and diagnostics in log files
+- **Console:** suppressed on Windows (`#![windows_subsystem = "windows"]`)
 
 ## Requirements
 
@@ -147,31 +174,16 @@ On first run, the discovered model path is saved to config automatically.
 | Rust | 1.85+ | 1.85+ |
 | C/C++ compiler | MSVC + CMake | Xcode CLT + CMake |
 | GPU | CUDA Toolkit 12+ | Metal (built-in) |
-| Global hotkey | Admin rights | Accessibility permission |
+| Global hotkey | — | Accessibility permission |
 | Microphone | ✓ | ✓ |
 
 To build without GPU acceleration, remove the platform GPU features from
 `whisper-rs` in `Cargo.toml` (`cuda` on Windows, `metal`/`coreml` on macOS).
 
-## Project structure
-
-```
-src/
-├── main.rs           Entry point, Tauri commands, global state, logging
-├── config.rs         Config struct, load/save, default path
-├── recorder.rs       Audio capture (cpal), device enumeration, format conversion
-├── transcriber.rs    Whisper transcription (whisper-rs, platform GPU backends)
-└── voice_service.rs  Background service orchestrator, clipboard, transcription loop
-```
-
 ## Contributing
 
-Contributions are welcome! See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines on:
-- Development setup
-- Code style and testing
-- Pull request process
-- Reporting issues
+See [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## License
 
-Apache License 2.0 — see [LICENSE](LICENSE) for details.
+Apache License 2.0 — see [LICENSE](LICENSE).
