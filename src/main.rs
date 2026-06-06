@@ -172,12 +172,13 @@ fn save_config(app: tauri::AppHandle, mut cfg: config::Config) -> Result<(), Str
     let config_path = config::default_path();
     cfg.save(&config_path); // save() handles errors internally
 
-    // Update config and re-register hotkey
-    let old_hotkey = {
+    // Update config and detect changes
+    let (old_hotkey, old_language) = {
         let mut config = state.config.lock().unwrap();
-        let old = normalize_hotkey(&config.hotkey);
+        let old_hk = normalize_hotkey(&config.hotkey);
+        let old_lang = config.language.clone();
         *config = cfg.clone();
-        old
+        (old_hk, old_lang)
     };
 
     // Re-register global hotkey if it changed
@@ -207,6 +208,20 @@ fn save_config(app: tauri::AppHandle, mut cfg: config::Config) -> Result<(), Str
                     });
                 tracing::warn!("🎹 Global hotkey re-registered: {}", normalized);
             }
+        }
+    }
+
+    // Update transcriber language immediately if changed
+    let new_language = cfg.language.clone();
+    if new_language != old_language {
+        if let Some(handle) = state.voice_service.lock().unwrap().as_ref() {
+            handle
+                .state
+                .transcriber
+                .lock()
+                .unwrap()
+                .set_language(new_language.clone());
+            tracing::info!("🌐 Language updated to {:?} (immediate)", new_language);
         }
     }
 

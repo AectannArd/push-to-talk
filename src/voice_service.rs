@@ -24,6 +24,7 @@ pub struct VoiceServiceHandle {
 pub struct VoiceServiceInner {
     pub is_recording: Arc<AtomicBool>,
     pub last_transcription: Arc<Mutex<Option<String>>>,
+    pub transcriber: Arc<Mutex<crate::transcriber::Transcriber>>,
     recording: Arc<Mutex<Option<Recording>>>,
     tx: mpsc::Sender<Vec<i16>>,
     rec: Arc<Mutex<crate::recorder::Recorder>>,
@@ -64,6 +65,7 @@ impl VoiceServiceHandle {
         let state = Arc::new(VoiceServiceInner {
             is_recording: app_is_recording,
             last_transcription,
+            transcriber: tr.clone(),
             recording,
             tx,
             rec,
@@ -73,7 +75,7 @@ impl VoiceServiceHandle {
         let state_clone = state.clone();
         let stop_flag_clone = stop_flag.clone();
         let thread_handle = thread::spawn(move || {
-            run_service_loop(state_clone, tr, rx, stop_flag_clone);
+            run_service_loop(state_clone, rx, stop_flag_clone);
         });
 
         // Spawn device monitoring thread
@@ -164,12 +166,11 @@ impl VoiceServiceInner {
 
 fn run_service_loop(
     state: Arc<VoiceServiceInner>,
-    tr: Arc<Mutex<crate::transcriber::Transcriber>>,
     rx: mpsc::Receiver<Vec<i16>>,
     stop_flag: Arc<AtomicBool>,
 ) {
     // Transcription thread
-    let tr_clone = tr.clone();
+    let tr_clone = state.transcriber.clone();
     let last_transcription = state.last_transcription.clone();
     let _tx_clone = state.tx.clone();
     let _transcribe_thread = thread::spawn(move || {

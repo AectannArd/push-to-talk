@@ -38,6 +38,12 @@ impl Transcriber {
         Ok(Self { ctx, language })
     }
 
+    /// Update the language hint without reloading the model.
+    /// Takes effect on the very next `transcribe()` call.
+    pub fn set_language(&mut self, language: Option<String>) {
+        self.language = language;
+    }
+
     /// Transcribe 16 kHz mono PCM-i16 samples into text.
     pub fn transcribe(&self, audio: &[i16]) -> Result<String> {
         let duration_s = audio.len() as f64 / 16_000.0;
