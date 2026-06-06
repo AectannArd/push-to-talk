@@ -90,15 +90,17 @@ impl Recorder {
         let default_config = device.default_input_config()?;
         let native_channels = default_config.channels();
         let native_sample_rate = default_config.sample_rate();
+        let sample_format = default_config.sample_format();
 
         tracing::info!(
-            "🎙  Using: {name} | {ch} ch, {rate} Hz → mono 16 kHz",
+            "🎙  Using: {name} | {ch} ch, {rate} Hz, {fmt:?} → mono 16 kHz i16",
             name = device
                 .description()
                 .map(|d| d.name().to_string())
                 .unwrap_or_else(|_| "<unknown>".into()),
             ch = native_channels,
             rate = native_sample_rate,
+            fmt = sample_format,
         );
 
         Ok((
@@ -113,8 +115,11 @@ impl Recorder {
 
     /// Begin capturing audio. Returns a [`Recording`] that can be stopped for the buffer.
     ///
-    /// Audio is converted on the fly: multi-channel → mono, native rate → 16 kHz,
-    /// f32 → i16. The output buffer always contains 16 kHz mono PCM.
+    /// Audio is converted on the fly: multi-channel → mono, native rate → 16 kHz.
+    /// Uses i16 on Windows (native WASAPI integer format) and f32 on macOS/Linux
+    /// (native CoreAudio / ALSA float format). The output buffer always contains
+    /// 16 kHz mono i16 PCM.
+    #[cfg(target_os = "windows")]
     pub fn start(&self) -> Result<Recording> {
         let buffer = Arc::new(Mutex::new(Vec::<i16>::new()));
         let buf = buffer.clone();
@@ -124,11 +129,85 @@ impl Recorder {
         let has_signal = Arc::new(AtomicBool::new(false));
         let sig = has_signal.clone();
 
-        // For diagnostics: log the first few raw f32 frames
-        let sample_count = Arc::new(AtomicBool::new(false));
-        let logged = sample_count.clone();
+        let logged = Arc::new(AtomicBool::new(false));
+        let logged_clone = logged.clone();
 
-        // Fractional position for sample-rate conversion
+        let position = Arc::new(Mutex::new(0.0f64));
+        let pos = position.clone();
+
+        let stream_config = cpal::StreamConfig {
+            channels: self.native_channels,
+            sample_rate: self.native_sample_rate,
+            buffer_size: cpal::BufferSize::Default,
+        };
+
+        let err_fn = |err| tracing::error!("⚠  Audio stream error: {err}");
+
+        let stream = self.device.build_input_stream(
+            &stream_config,
+            move |data: &[i16], _info: &cpal::InputCallbackInfo| {
+                let mut buf = buf.lock().unwrap();
+                let mut pos = pos.lock().unwrap();
+
+                if !logged_clone.load(Ordering::Relaxed) {
+                    logged_clone.store(true, Ordering::Relaxed);
+                    let preview: Vec<String> = data
+                        .iter()
+                        .take(8 * channels)
+                        .map(|v| format!("{v:+}"))
+                        .collect();
+                    tracing::info!(
+                        "🔬 Raw i16 audio (first {n} samples): [{s}]",
+                        n = 8 * channels,
+                        s = preview.join(", "),
+                    );
+                }
+
+                for frame in data.chunks(channels) {
+                    let mono: i16 = if channels == 1 {
+                        frame[0]
+                    } else {
+                        let sum: i32 = frame.iter().map(|&s| s as i32).sum();
+                        (sum / channels as i32) as i16
+                    };
+
+                    if mono.abs() > 3 {
+                        sig.store(true, Ordering::Relaxed);
+                    }
+
+                    *pos += 1.0;
+                    if *pos >= ratio {
+                        *pos -= ratio;
+                        buf.push(mono);
+                    }
+                }
+            },
+            err_fn,
+            None,
+        )?;
+
+        stream.play()?;
+
+        Ok(Recording {
+            stream,
+            buffer,
+            has_signal,
+        })
+    }
+
+    #[cfg(not(target_os = "windows"))]
+    pub fn start(&self) -> Result<Recording> {
+        let buffer = Arc::new(Mutex::new(Vec::<i16>::new()));
+        let buf = buffer.clone();
+
+        let channels = self.native_channels as usize;
+        let ratio = self.native_sample_rate as f64 / 16_000.0;
+        let has_signal = Arc::new(AtomicBool::new(false));
+        let sig = has_signal.clone();
+
+        let logged = Arc::new(AtomicBool::new(false));
+        let logged_clone = logged.clone();
+
         let position = Arc::new(Mutex::new(0.0f64));
         let pos = position.clone();
 
@@ -146,16 +225,15 @@ impl Recorder {
                 let mut buf = buf.lock().unwrap();
                 let mut pos = pos.lock().unwrap();
 
-                // Log first few raw frames for diagnostics (once)
-                if !logged.load(Ordering::Relaxed) {
-                    logged.store(true, Ordering::Relaxed);
+                if !logged_clone.load(Ordering::Relaxed) {
+                    logged_clone.store(true, Ordering::Relaxed);
                     let preview: Vec<String> = data
                         .iter()
                         .take(4 * channels)
                         .map(|v| format!("{v:+.6}"))
                         .collect();
                     tracing::info!(
-                        "🔬 Raw audio (first {n} samples): [{s}]",
+                        "🔬 Raw f32 audio (first {n} samples): [{s}]",
                         n = 4 * channels,
                         s = preview.join(", "),
                     );
@@ -224,7 +302,7 @@ pub fn list_input_devices() -> Result<Vec<DeviceInfo>> {
                 .unwrap_or_else(|_| "<unknown>".into());
             let config = d
                 .default_input_config()
-                .map(|c| format!("{} ch, {} Hz", c.channels(), c.sample_rate()))
+                .map(|c| format!("{} ch, {} Hz, {:?}", c.channels(), c.sample_rate(), c.sample_format()))
                 .unwrap_or_else(|_| "n/a".into());
             DeviceInfo {
                 id,

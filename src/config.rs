@@ -32,7 +32,7 @@ fn default_log_dir() -> String {
 }
 
 fn default_log_level() -> String {
-    "error".into()
+    "warn".into()
 }
 
 fn default_retention_hours() -> u64 {

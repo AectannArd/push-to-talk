@@ -158,7 +158,7 @@ fn get_config() -> config::Config {
 }
 
 #[tauri::command]
-fn save_config(app: tauri::AppHandle, cfg: config::Config) -> Result<(), String> {
+fn save_config(app: tauri::AppHandle, mut cfg: config::Config) -> Result<(), String> {
     tracing::debug!("Save config called");
 
     let Some(state) = get_global_state() else {
@@ -166,13 +166,16 @@ fn save_config(app: tauri::AppHandle, cfg: config::Config) -> Result<(), String>
         return Err("State not initialized".to_string());
     };
 
+    // Normalize hotkey (handle old rdev-era aliases like "Ins" → "Insert")
+    cfg.hotkey = normalize_hotkey(&cfg.hotkey);
+
     let config_path = config::default_path();
     cfg.save(&config_path); // save() handles errors internally
 
     // Update config and re-register hotkey
     let old_hotkey = {
         let mut config = state.config.lock().unwrap();
-        let old = config.hotkey.clone();
+        let old = normalize_hotkey(&config.hotkey);
         *config = cfg.clone();
         old
     };
@@ -191,7 +194,8 @@ fn save_config(app: tauri::AppHandle, cfg: config::Config) -> Result<(), String>
 
         // Register new hotkey
         if !new_hotkey.is_empty() {
-            if let Ok(shortcut) = new_hotkey.parse::<Shortcut>() {
+            let normalized = normalize_hotkey(&new_hotkey);
+            if let Ok(shortcut) = normalized.parse::<Shortcut>() {
                 let shortcut_handler =
                     move |_app: &tauri::AppHandle, _id: &Shortcut, event: ShortcutEvent| {
                         handle_shortcut_event(event);
@@ -199,9 +203,9 @@ fn save_config(app: tauri::AppHandle, cfg: config::Config) -> Result<(), String>
                 app.global_shortcut()
                     .on_shortcut(shortcut, shortcut_handler)
                     .unwrap_or_else(|e| {
-                        tracing::warn!("Failed to register hotkey '{}': {}", new_hotkey, e)
+                        tracing::error!("❌ Failed to register hotkey '{}': {}", normalized, e)
                     });
-                tracing::info!("🎹 Global hotkey re-registered: {}", new_hotkey);
+                tracing::warn!("🎹 Global hotkey re-registered: {}", normalized);
             }
         }
     }
@@ -520,6 +524,33 @@ fn toggle_recording_inner(state: &AppState) {
     }
 }
 
+/// Normalize key names from the old rdev-based CLI to keyboard_types::Code format.
+/// The old CLI used aliases like "Ins", "Del", "Esc" while global-hotkey
+/// expects W3C spec names like "Insert", "Delete", "Escape".
+fn normalize_hotkey(raw: &str) -> String {
+    let mut parts: Vec<&str> = raw.split('+').map(|s| s.trim()).collect();
+    if let Some(key) = parts.last_mut() {
+        let normalized = match key.to_lowercase().as_str() {
+            "ins" => "Insert",
+            "del" => "Delete",
+            "esc" => "Escape",
+            "enter" => "Enter",
+            "return" => "Enter",
+            "back" => "Backspace",
+            "pgup" => "PageUp",
+            "pgdn" => "PageDown",
+            "prtsc" => "PrintScreen",
+            "caps" => "CapsLock",
+            "pause" => "Pause",
+            "break" => "Pause",
+            // Leave everything else unchanged (single letters, digits, F-keys, etc.)
+            _ => return raw.to_string(),
+        };
+        *key = normalized;
+    }
+    parts.join("+")
+}
+
 /// Handle global shortcut press/release events.
 /// Press starts recording, release stops it.
 /// If the monitor force-stopped recording (device disconnect), release is a no-op
@@ -527,27 +558,37 @@ fn toggle_recording_inner(state: &AppState) {
 fn handle_shortcut_event(event: tauri_plugin_global_shortcut::ShortcutEvent) {
     use tauri_plugin_global_shortcut::ShortcutState;
 
-    if let Some(state) = get_global_state() {
-        if !*state.is_running.lock().unwrap() {
-            return;
-        }
+    let Some(state) = get_global_state() else {
+        tracing::error!("🚨 Shortcut: global state not initialized");
+        return;
+    };
 
-        match event.state {
-            ShortcutState::Pressed => {
-                if !state.is_recording.load(Ordering::SeqCst) {
-                    if let Some(handle) = state.voice_service.lock().unwrap().as_ref() {
-                        let _ = handle.start_recording();
-                    }
-                    tracing::info!("🎤 Hotkey press — starting recording");
+    if !*state.is_running.lock().unwrap() {
+        tracing::warn!("🚨 Shortcut: service not running, ignoring hotkey");
+        return;
+    }
+
+    tracing::warn!(
+        "⌨️ Shortcut event: state={:?}, is_recording={}",
+        event.state,
+        state.is_recording.load(Ordering::Relaxed)
+    );
+
+    match event.state {
+        ShortcutState::Pressed => {
+            if !state.is_recording.load(Ordering::SeqCst) {
+                if let Some(handle) = state.voice_service.lock().unwrap().as_ref() {
+                    let _ = handle.start_recording();
                 }
+                tracing::info!("🎤 Hotkey press — starting recording");
             }
-            ShortcutState::Released => {
-                if state.is_recording.load(Ordering::SeqCst) {
-                    if let Some(handle) = state.voice_service.lock().unwrap().as_ref() {
-                        let _ = handle.stop_recording();
-                    }
-                    tracing::info!("🛑 Hotkey release — stopping recording");
+        }
+        ShortcutState::Released => {
+            if state.is_recording.load(Ordering::SeqCst) {
+                if let Some(handle) = state.voice_service.lock().unwrap().as_ref() {
+                    let _ = handle.stop_recording();
                 }
+                tracing::info!("🛑 Hotkey release — stopping recording");
             }
         }
     }
@@ -658,7 +699,8 @@ fn main() {
 
             if !hotkey.is_empty() {
                 use tauri_plugin_global_shortcut::{GlobalShortcutExt, Shortcut, ShortcutEvent};
-                if let Ok(shortcut) = hotkey.parse::<Shortcut>() {
+                let normalized = normalize_hotkey(&hotkey);
+                if let Ok(shortcut) = normalized.parse::<Shortcut>() {
                     let shortcut_handler =
                         move |_app: &tauri::AppHandle, _id: &Shortcut, event: ShortcutEvent| {
                             handle_shortcut_event(event);
@@ -666,11 +708,11 @@ fn main() {
                     app.global_shortcut()
                         .on_shortcut(shortcut, shortcut_handler)
                         .unwrap_or_else(|e| {
-                            tracing::warn!("Failed to register hotkey '{}': {}", hotkey, e)
+                            tracing::error!("❌ Failed to register hotkey '{}': {}", normalized, e)
                         });
-                    tracing::info!("🎹 Global hotkey registered: {}", hotkey);
+                    tracing::warn!("🎹 Global hotkey registered: {}", normalized);
                 } else {
-                    tracing::warn!("Invalid hotkey format: {}", hotkey);
+                    tracing::error!("❌ Invalid hotkey format: {}", normalized);
                 }
             }
 
