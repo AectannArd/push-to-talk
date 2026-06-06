@@ -97,19 +97,19 @@ If text insertion stops working or permissions become corrupted, reset them:
 
 ```bash
 # Reset Accessibility permissions
-tccutil reset Accessibility ru.tcsbank.push-to-talk
+tccutil reset Accessibility org.moonlightflame.push-to-talk
 
 # Reset Input Monitoring permissions
-tccutil reset InputMonitoring ru.tcsbank.push-to-talk
+tccutil reset InputMonitoring org.moonlightflame.push-to-talk
 
 # Reset Automation permissions
-tccutil reset Automation ru.tcsbank.push-to-talk
+tccutil reset Automation org.moonlightflame.push-to-talk
 
 # Reset all permissions for the app
-tccutil reset All ru.tcsbank.push-to-talk
+tccutil reset All org.moonlightflame.push-to-talk
 ```
 
-**Note:** The bundle identifier `ru.tcsbank.push-to-talk` is used when running from a `.app` bundle. For CLI usage, permissions are granted to the terminal application itself (e.g., `com.googlecode.iterm2` for iTerm2).
+**Note:** The bundle identifier `org.moonlightflame.push-to-talk` is used when running from a `.app` bundle. For CLI usage, permissions are granted to the terminal application itself (e.g., `com.googlecode.iterm2` for iTerm2).
 
 After resetting, restart the application and re-grant permissions when prompted.
 

@@ -254,6 +254,11 @@ fn paste_from_clipboard() {
     }
 }
 
+#[cfg(not(target_os = "macos"))]
+fn paste_from_clipboard() {
+    // On non-macOS, paste is handled by the frontend or user manually
+}
+
 #[cfg(target_os = "macos")]
 fn copy_to_clipboard(text: &str) {
     use objc2_app_kit::NSPasteboard;
