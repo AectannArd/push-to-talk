@@ -735,17 +735,15 @@ fn main() {
                 }
             }
 
-            // System tray with menu (Show / Toggle Recording / Quit)
+            // System tray with menu (Configure / Quit)
             {
                 use tauri::menu::{Menu, MenuItem};
                 use tauri::tray::TrayIconBuilder;
 
                 let config_clone = app_state_arc.config.clone();
-                let show_i = MenuItem::with_id(app, "show", "Show", true, None::<&str>)?;
-                let toggle_i =
-                    MenuItem::with_id(app, "toggle", "Toggle Recording", true, None::<&str>)?;
+                let show_i = MenuItem::with_id(app, "show", "Configure", true, None::<&str>)?;
                 let quit_i = MenuItem::with_id(app, "quit", "Quit", true, None::<&str>)?;
-                let menu = Menu::with_items(app, &[&show_i, &toggle_i, &quit_i])?;
+                let menu = Menu::with_items(app, &[&show_i, &quit_i])?;
 
                 let mut tray_builder = TrayIconBuilder::new()
                     .menu(&menu)
@@ -770,9 +768,6 @@ fn main() {
                                     "🪟 Window shown - state saved (window_hidden=false)"
                                 );
                             }
-                        }
-                        "toggle" => {
-                            let _ = trigger_recording();
                         }
                         "quit" => {
                             app.exit(0);
