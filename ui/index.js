@@ -39,6 +39,15 @@ let isRecording = false;
 let isServiceRunning = false;
 let selectedModel = null;  // full path to the selected ggml-*.bin file (from ModelDto.path)
 
+// All downloadable Whisper models from HuggingFace
+const DOWNLOADABLE_MODELS = [
+    { name: 'ggml-tiny.bin',     desc: 'ggml-tiny.bin (41 MB)' },
+    { name: 'ggml-base.bin',     desc: 'ggml-base.bin (74 MB)' },
+    { name: 'ggml-small.bin',    desc: 'ggml-small.bin (244 MB)' },
+    { name: 'ggml-medium.bin',   desc: 'ggml-medium.bin (769 MB)' },
+    { name: 'ggml-large-v3.bin', desc: 'ggml-large-v3.bin (3.1 GB)' },
+];
+
 waitForTauri()
     .then(inv => {
         invoke = inv;
@@ -346,17 +355,16 @@ document.getElementById('scanModelsBtn').addEventListener('click', async () => {
             });
         }
 
-        // Filter download dropdown: show only models not yet downloaded
+        // Rebuild download dropdown: only show models not yet in the repository
         const foundFilenames = new Set(models.map(m => m.filename));
         const downloadSelect = document.getElementById('modelToDownload');
-        for (const option of downloadSelect.options) {
-            option.hidden = foundFilenames.has(option.value);
-        }
-        // If no models found at all, show all download options
-        if (models.length === 0) {
-            for (const option of downloadSelect.options) {
-                option.hidden = false;
-            }
+        const available = DOWNLOADABLE_MODELS.filter(m => !foundFilenames.has(m.name));
+        if (available.length === 0) {
+            downloadSelect.innerHTML = '<option value="">All models downloaded ✓</option>';
+        } else {
+            downloadSelect.innerHTML = available.map(m =>
+                `<option value="${m.name}">${m.desc}</option>`
+            ).join('');
         }
     } catch (error) {
         modelListEl.innerHTML = `<p style="color: #ff4444;">Error: ${error}</p>`;
