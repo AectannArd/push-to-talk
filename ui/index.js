@@ -346,11 +346,17 @@ document.getElementById('scanModelsBtn').addEventListener('click', async () => {
             });
         }
 
-        // Filter download dropdown: hide models already in the repository
+        // Filter download dropdown: show only models not yet downloaded
         const foundFilenames = new Set(models.map(m => m.filename));
         const downloadSelect = document.getElementById('modelToDownload');
         for (const option of downloadSelect.options) {
             option.hidden = foundFilenames.has(option.value);
+        }
+        // If no models found at all, show all download options
+        if (models.length === 0) {
+            for (const option of downloadSelect.options) {
+                option.hidden = false;
+            }
         }
     } catch (error) {
         modelListEl.innerHTML = `<p style="color: #ff4444;">Error: ${error}</p>`;
