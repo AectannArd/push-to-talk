@@ -1,5 +1,7 @@
 //! Push-to-Talk Tauri Application with Global State
 
+#![windows_subsystem = "windows"]
+
 mod config;
 mod recorder;
 mod transcriber;
