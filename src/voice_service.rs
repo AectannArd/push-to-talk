@@ -223,7 +223,8 @@ fn find_model(config: &Config) -> Option<std::path::PathBuf> {
     }
 
     for dir in &config.model_search_dirs {
-        let path = std::path::Path::new(dir);
+        let expanded = shellexpand::tilde(dir);
+        let path = std::path::Path::new(expanded.as_ref());
         if path.exists() {
             for entry in std::fs::read_dir(path).ok()? {
                 let entry = entry.ok()?;
