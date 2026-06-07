@@ -417,6 +417,11 @@ async fn download_model(model_id: String, target_dir: String) -> Result<String, 
     let target_path = shellexpand::tilde(&target_dir).to_string();
     let target_path = Path::new(&target_path).join(&entry.name);
 
+    // Write to a temporary .part file, then rename on success.
+    // This prevents scan_models from discovering a zero-byte or partial file
+    // mid-download and exposing it as a selectable (but broken) model.
+    let part_path = target_path.with_extension("part");
+
     // Create directory if it doesn't exist
     if let Some(parent) = target_path.parent() {
         fs::create_dir_all(parent).map_err(|e| format!("Failed to create directory: {}", e))?;
@@ -437,7 +442,7 @@ async fn download_model(model_id: String, target_dir: String) -> Result<String, 
         .content_length()
         .ok_or("Content-Length not available")?;
 
-    let mut file = tokio::fs::File::create(&target_path)
+    let mut file = tokio::fs::File::create(&part_path)
         .await
         .map_err(|e| format!("Failed to create file: {}", e))?;
 
@@ -454,6 +459,10 @@ async fn download_model(model_id: String, target_dir: String) -> Result<String, 
         let progress = (downloaded as f64 / total_size as f64 * 100.0) as u32;
         tracing::info!("⬇️ Downloading {}: {}%", entry.name, progress);
     }
+
+    // Atomically promote the completed download
+    std::fs::rename(&part_path, &target_path)
+        .map_err(|e| format!("Failed to finalize download: {}", e))?;
 
     Ok(format!(
         "Downloaded {} to {}",
