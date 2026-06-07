@@ -442,9 +442,7 @@ async fn download_model(model_id: String, target_dir: String) -> Result<String, 
         return Err(format!("Download failed: HTTP {}", response.status()));
     }
 
-    let total_size = response
-        .content_length()
-        .ok_or("Content-Length not available")?;
+    let total_size = response.content_length();
 
     let mut file = tokio::fs::File::create(&part_path)
         .await
@@ -460,8 +458,13 @@ async fn download_model(model_id: String, target_dir: String) -> Result<String, 
             .map_err(|e| format!("Write error: {}", e))?;
 
         downloaded += chunk.len() as u64;
-        let progress = (downloaded as f64 / total_size as f64 * 100.0) as u32;
-        tracing::info!("⬇️ Downloading {}: {}%", entry.name, progress);
+        if let Some(total) = total_size {
+            let progress = (downloaded as f64 / total as f64 * 100.0) as u32;
+            tracing::info!("⬇️ Downloading {}: {}%", entry.name, progress);
+        } else {
+            let mb = downloaded as f64 / (1024.0 * 1024.0);
+            tracing::info!("⬇️ Downloading {}: {:.1} MB", entry.name, mb);
+        }
     }
 
     // Atomically promote the completed download
