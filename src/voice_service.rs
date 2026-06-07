@@ -17,6 +17,7 @@ use tracing::{error, info, warn};
 pub struct VoiceServiceHandle {
     stop_flag: Arc<AtomicBool>,
     thread_handle: Option<thread::JoinHandle<()>>,
+    transcribe_handle: Option<thread::JoinHandle<()>>,
     monitor_handle: Option<thread::JoinHandle<()>>,
     pub state: Arc<VoiceServiceInner>,
 }
@@ -63,9 +64,13 @@ impl VoiceServiceHandle {
         // Shared state
         let recording: Arc<Mutex<Option<Recording>>> = Arc::new(Mutex::new(None));
 
+        // Clone before moving into VoiceServiceInner
+        let last_tr = last_transcription.clone();
+        let should_paste_clone = Arc::new(AtomicBool::new(false));
+
         let state = Arc::new(VoiceServiceInner {
             is_recording: app_is_recording,
-            should_paste: Arc::new(AtomicBool::new(false)),
+            should_paste: should_paste_clone.clone(),
             last_transcription,
             transcriber: tr.clone(),
             recording,
@@ -73,11 +78,36 @@ impl VoiceServiceHandle {
             rec,
         });
 
-        // Spawn the service loop
-        let state_clone = state.clone();
+        // Spawn the transcription thread (processes audio from the channel)
+        let tr_clone = tr.clone();
+        let should_paste_tx = should_paste_clone.clone();
+        let transcribe_handle = thread::spawn(move || {
+            for audio in rx {
+                match tr_clone.lock().unwrap().transcribe(&audio) {
+                    Ok(text) if text.is_empty() => {
+                        warn!("⚠ No speech detected");
+                    }
+                    Ok(text) => {
+                        info!("📝 \"{}\"", text);
+                        *last_tr.lock().unwrap() = Some(text.clone());
+                        if should_paste_tx.load(Ordering::Relaxed) {
+                            copy_to_clipboard(&text);
+                            info!("✅ Text copied to clipboard");
+                            thread::sleep(Duration::from_millis(100));
+                            paste_from_clipboard();
+                            info!("✅ Paste completed");
+                        }
+                    }
+                    Err(e) => error!("❌ Transcription error: {}", e),
+                }
+            }
+            info!("👋 Transcription thread exiting (channel closed)");
+        });
+
+        // Spawn the service loop (keeps the service alive until stop)
         let stop_flag_clone = stop_flag.clone();
         let thread_handle = thread::spawn(move || {
-            run_service_loop(state_clone, rx, stop_flag_clone);
+            run_service_loop(stop_flag_clone);
         });
 
         // Spawn device monitoring thread
@@ -91,6 +121,7 @@ impl VoiceServiceHandle {
         Ok(Self {
             stop_flag,
             thread_handle: Some(thread_handle),
+            transcribe_handle: Some(transcribe_handle),
             monitor_handle: Some(monitor_handle),
             state,
         })
@@ -111,6 +142,11 @@ impl VoiceServiceHandle {
     pub fn stop(self) {
         self.stop_flag.store(true, Ordering::Relaxed);
         if let Some(handle) = self.thread_handle {
+            let _ = handle.join();
+        }
+        // The service-loop thread held the last tx clone; dropping it closes
+        // the channel, so the transcription thread exits and we can join it.
+        if let Some(handle) = self.transcribe_handle {
             let _ = handle.join();
         }
         if let Some(handle) = self.monitor_handle {
@@ -166,44 +202,9 @@ impl VoiceServiceInner {
     }
 }
 
-fn run_service_loop(
-    state: Arc<VoiceServiceInner>,
-    rx: mpsc::Receiver<Vec<i16>>,
-    stop_flag: Arc<AtomicBool>,
-) {
-    // Transcription thread
-    let tr_clone = state.transcriber.clone();
-    let last_transcription = state.last_transcription.clone();
-    let should_paste = state.should_paste.clone();
-    let _tx_clone = state.tx.clone();
-    let _transcribe_thread = thread::spawn(move || {
-        for audio in rx {
-            match tr_clone.lock().unwrap().transcribe(&audio) {
-                Ok(text) if text.is_empty() => {
-                    warn!("⚠ No speech detected");
-                }
-                Ok(text) => {
-                    info!("📝 \"{}\"", text);
-                    // Update last transcription (always)
-                    *last_transcription.lock().unwrap() = Some(text.clone());
-                    // Copy & paste only when triggered by global hotkey
-                    if should_paste.load(Ordering::Relaxed) {
-                        copy_to_clipboard(&text);
-                        info!("✅ Text copied to clipboard");
-                        thread::sleep(Duration::from_millis(100));
-                        paste_from_clipboard();
-                        info!("✅ Paste completed");
-                    }
-                }
-                Err(e) => error!("❌ Transcription error: {}", e),
-            }
-        }
-        info!("👋 Transcription thread exiting (channel closed)");
-    });
-
+fn run_service_loop(stop_flag: Arc<AtomicBool>) {
     info!("✅ Voice service loop started");
-
-    // Keep service alive
+    // Keep service alive until stop is requested
     loop {
         thread::sleep(std::time::Duration::from_secs(1));
         if stop_flag.load(Ordering::Relaxed) {
@@ -211,7 +212,6 @@ fn run_service_loop(
             break;
         }
     }
-
     info!("👋 Voice service stopped");
 }
 
