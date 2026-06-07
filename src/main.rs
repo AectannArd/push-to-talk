@@ -565,15 +565,16 @@ fn init_logging(config: &config::Config) {
     tracing::info!("📝 Logging initialized to {}", log_dir.display());
 
     // Start log cleanup thread
-    start_log_cleanup(log_dir.to_path_buf(), config.log_retention_hours);
+    start_log_cleanup(log_dir.to_path_buf());
 }
 
-fn start_log_cleanup(log_dir: std::path::PathBuf, retention_hours: u64) {
+fn start_log_cleanup(log_dir: std::path::PathBuf) {
     std::thread::spawn(move || {
-        // Run cleanup every hour
         loop {
             std::thread::sleep(std::time::Duration::from_secs(3600));
-            cleanup_old_logs(&log_dir, retention_hours);
+            // Re-read retention from config so changes take effect without restart.
+            let cfg = config::Config::load(&config::default_path());
+            cleanup_old_logs(&log_dir, cfg.log_retention_hours);
         }
     });
 }
