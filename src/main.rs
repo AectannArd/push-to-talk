@@ -338,19 +338,83 @@ fn scan_models(model_search_dirs: Vec<String>) -> Result<Vec<ModelDto>, String> 
     Ok(models)
 }
 
+/// Entry in the downloadable-model catalog.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DownloadableModel {
+    pub id: String,
+    pub name: String,
+    pub desc: String,
+    pub url: String,
+}
+
+/// Static catalog of all models available for download.
+static MODEL_CATALOG: once_cell::sync::Lazy<Vec<DownloadableModel>> =
+    once_cell::sync::Lazy::new(|| {
+        vec![
+            DownloadableModel {
+                id: "tiny".into(),
+                name: "ggml-tiny.bin".into(),
+                desc: "ggml-tiny.bin (41 MB)".into(),
+                url: "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-tiny.bin"
+                    .into(),
+            },
+            DownloadableModel {
+                id: "base".into(),
+                name: "ggml-base.bin".into(),
+                desc: "ggml-base.bin (74 MB)".into(),
+                url: "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-base.bin"
+                    .into(),
+            },
+            DownloadableModel {
+                id: "small".into(),
+                name: "ggml-small.bin".into(),
+                desc: "ggml-small.bin (244 MB)".into(),
+                url: "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-small.bin"
+                    .into(),
+            },
+            DownloadableModel {
+                id: "medium".into(),
+                name: "ggml-medium.bin".into(),
+                desc: "ggml-medium.bin (769 MB)".into(),
+                url: "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-medium.bin"
+                    .into(),
+            },
+            DownloadableModel {
+                id: "large-v3".into(),
+                name: "ggml-large-v3.bin".into(),
+                desc: "ggml-large-v3.bin (3.1 GB)".into(),
+                url: "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-large-v3.bin"
+                    .into(),
+            },
+            DownloadableModel {
+                id: "large-v3-russian".into(),
+                name: "ggml-large-v3-russian-f16.bin".into(),
+                desc: "Russian large-v3 f16 (3.1 GB)".into(),
+                url: "https://huggingface.co/Pomni/whisper-large-v3-russian-ggml-allquants/resolve/main/ggml-large-v3-russian-f16.bin".into(),
+            },
+        ]
+    });
+
 #[tauri::command]
-async fn download_model(model_name: String, target_dir: String) -> Result<String, String> {
+fn get_downloadable_models() -> Vec<DownloadableModel> {
+    MODEL_CATALOG.clone()
+}
+
+#[tauri::command]
+async fn download_model(model_id: String, target_dir: String) -> Result<String, String> {
     use futures_util::StreamExt;
     use reqwest::Client;
     use tokio::io::AsyncWriteExt;
 
-    let huggingface_url = format!(
-        "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/{}",
-        model_name
-    );
+    // Look up model in catalog — rejects unknown IDs
+    let entry = MODEL_CATALOG
+        .iter()
+        .find(|m| m.id == model_id)
+        .ok_or_else(|| format!("Unknown model ID: '{model_id}'"))?
+        .clone();
 
     let target_path = shellexpand::tilde(&target_dir).to_string();
-    let target_path = Path::new(&target_path).join(&model_name);
+    let target_path = Path::new(&target_path).join(&entry.name);
 
     // Create directory if it doesn't exist
     if let Some(parent) = target_path.parent() {
@@ -359,7 +423,7 @@ async fn download_model(model_name: String, target_dir: String) -> Result<String
 
     let client = Client::new();
     let response = client
-        .get(&huggingface_url)
+        .get(&entry.url)
         .send()
         .await
         .map_err(|e| format!("Failed to start download: {}", e))?;
@@ -387,12 +451,12 @@ async fn download_model(model_name: String, target_dir: String) -> Result<String
 
         downloaded += chunk.len() as u64;
         let progress = (downloaded as f64 / total_size as f64 * 100.0) as u32;
-        tracing::info!("⬇️ Downloading {}: {}%", model_name, progress);
+        tracing::info!("⬇️ Downloading {}: {}%", entry.name, progress);
     }
 
     Ok(format!(
         "Downloaded {} to {}",
-        model_name,
+        entry.name,
         target_path.display()
     ))
 }
@@ -436,19 +500,25 @@ fn init_logging(config: &config::Config) {
         eprintln!("Failed to create log directory: {}", e);
     }
 
+    // Choose file extension and format variant based on config
+    let (file_suffix, is_json) = match config.log_format.as_str() {
+        "json" => ("json", true),
+        _ => ("txt", false), // default: human-readable text
+    };
+
     // Create minutely rolling file appender
-    // Filename format: push-to-talk.YYYY-MM-DD-HH-MM.log
+    // Filename format: push-to-talk.YYYY-MM-DD-HH-MM.{txt,json}
     let file_appender = RollingFileAppender::builder()
         .rotation(Rotation::MINUTELY)
         .filename_prefix("push-to-talk")
-        .filename_suffix("log")
+        .filename_suffix(file_suffix)
         .build(log_dir)
         .expect("Failed to create file appender");
 
     let file_filter =
         EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new(&config.log_level));
 
-    // Console layer - always INFO level or higher for clean output
+    // Console layer — always human-readable text, INFO level or higher
     let console_filter =
         EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info"));
 
@@ -460,17 +530,24 @@ fn init_logging(config: &config::Config) {
         .with_line_number(false)
         .with_filter(console_filter);
 
-    // File layer
-    let file_layer = fmt::layer()
-        .with_writer(file_appender)
-        .with_target(false)
-        .with_thread_ids(false)
-        .with_file(false)
-        .with_line_number(false);
+    // File layer — text or JSON depending on config
+    let file_layer = {
+        let layer = fmt::layer()
+            .with_writer(file_appender)
+            .with_target(false)
+            .with_thread_ids(false)
+            .with_file(false)
+            .with_line_number(false);
+        if is_json {
+            layer.json().with_filter(file_filter).boxed()
+        } else {
+            layer.with_filter(file_filter).boxed()
+        }
+    };
 
     tracing_subscriber::registry()
         .with(console_layer)
-        .with(file_layer.with_filter(file_filter))
+        .with(file_layer)
         .init();
 
     tracing::info!("📝 Logging initialized to {}", log_dir.display());
@@ -657,6 +734,7 @@ fn main() {
             list_audio_devices,
             get_current_device,
             scan_models,
+            get_downloadable_models,
             download_model,
             frontend_log,
         ])

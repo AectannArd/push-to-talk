@@ -43,14 +43,8 @@ let lastDisplayedTranscription = null;
 let selectedModel = null;
 let lastModelScan = '';
 
-// All downloadable Whisper models from HuggingFace
-const DOWNLOADABLE_MODELS = [
-    { name: 'ggml-tiny.bin',     desc: 'ggml-tiny.bin (41 MB)' },
-    { name: 'ggml-base.bin',     desc: 'ggml-base.bin (74 MB)' },
-    { name: 'ggml-small.bin',    desc: 'ggml-small.bin (244 MB)' },
-    { name: 'ggml-medium.bin',   desc: 'ggml-medium.bin (769 MB)' },
-    { name: 'ggml-large-v3.bin', desc: 'ggml-large-v3.bin (3.1 GB)' },
-];
+// Model catalog loaded from backend at startup
+let downloadableModels = [];
 
 waitForTauri()
     .then(inv => {
@@ -63,6 +57,8 @@ waitForTauri()
         forwardConsole('warn', 'warn');
         forwardConsole('error', 'error');
 
+        // Load catalog from backend (model IDs → names, descs, URLs)
+        loadCatalog();
         // Load config once on startup
         loadConfig();
         // Poll only for status updates (recording state)
@@ -169,10 +165,10 @@ function autoSaveConfig() {
             await invoke('save_config', { cfg: config });
         } catch (error) {
             // Serialize error properly for Tauri errors
-            const errorMsg = typeof error === 'string' ? error : 
-                            error?.message || 
-                            error?.toString() || 
-                            JSON.stringify(error) || 
+            const errorMsg = typeof error === 'string' ? error :
+                            error?.message ||
+                            error?.toString() ||
+                            JSON.stringify(error) ||
                             'Unknown error';
             console.error('Auto-save failed: ' + errorMsg);
         }
@@ -187,6 +183,14 @@ autoSaveFields.forEach(id => {
         el.addEventListener(id === 'deviceSelect' ? 'change' : 'input', autoSaveConfig);
     }
 });
+
+async function loadCatalog() {
+    try {
+        downloadableModels = await invoke('get_downloadable_models');
+    } catch (error) {   
+        console.error('Failed to load model catalog:', error);
+    }
+}
 
 async function loadConfig() {
     try {
@@ -255,6 +259,8 @@ function updateStatusUI(status) {
 // Select a model for transcription and auto-save
 function selectModel(path) {
     selectedModel = path;
+    // Reset snapshot so scanModels re-renders the radio-button selection
+    lastModelScan = '';
     // Re-render to update selection markers
     scanModels();
     // Auto-save the new model selection
@@ -381,15 +387,15 @@ async function scanModels() {
             });
         }
 
-        // Rebuild download dropdown: only show models not yet in the repository
+        // Rebuild download dropdown: only show models not yet on disk
         const foundFilenames = new Set(models.map(m => m.filename));
         const downloadSelect = document.getElementById('modelToDownload');
-        const available = DOWNLOADABLE_MODELS.filter(m => !foundFilenames.has(m.name));
+        const available = downloadableModels.filter(m => !foundFilenames.has(m.name));
         if (available.length === 0) {
             downloadSelect.innerHTML = '<option value="">All models downloaded ✓</option>';
         } else {
             downloadSelect.innerHTML = available.map(m =>
-                `<option value="${m.name}">${m.desc}</option>`
+                `<option value="${m.id}">${m.desc}</option>`
             ).join('');
         }
 
@@ -408,12 +414,12 @@ setInterval(() => {
 // Download model button
 document.getElementById('downloadModelBtn').addEventListener('click', async () => {
     const select = document.getElementById('modelToDownload');
-    const modelName = select.value;
+    const modelId = select.value;
     const downloadBtn = document.getElementById('downloadModelBtn');
 
-    // Guard: don't re-download models already in the repository
-    if (select.selectedOptions[0]?.hidden) {
-        showStatus(`${modelName} is already downloaded`, 'error');
+    // Guard: empty value = no model selected (placeholder "All models downloaded")
+    if (!modelId) {
+        showStatus('No model selected for download', 'error');
         return;
     }
 
@@ -423,8 +429,8 @@ document.getElementById('downloadModelBtn').addEventListener('click', async () =
     try {
         const config = buildConfigFromForm();
         const targetDir = config.model_search_dirs[0] || '~/.push-to-talk/models';
-        await invoke('download_model', { modelName, targetDir });
-        showStatus(`Model ${modelName} downloaded successfully!`, 'success');
+        await invoke('download_model', { modelId, targetDir });
+        showStatus(`Model ${modelId} downloaded successfully!`, 'success');
         // Immediate re-scan to show the new model and refresh the dropdown
         scanModels();
     } catch (error) {

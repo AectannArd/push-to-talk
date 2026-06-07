@@ -1,11 +1,52 @@
 use anyhow::{Context, Result};
+use std::ffi::CStr;
 use std::path::Path;
+use std::sync::Once;
+use whisper_cpp_plus::whisper_cpp_plus_sys::ggml_log_level;
 
-/// Thin wrapper around whisper-rs for push-to-talk transcription.
+/// Thin wrapper around whisper-cpp-plus for push-to-talk transcription.
 pub struct Transcriber {
-    ctx: whisper_rs::WhisperContext,
+    ctx: whisper_cpp_plus::WhisperContext,
     /// Language from config, or None for auto-detect.
     language: Option<String>,
+}
+
+/// Install whisper.cpp → tracing log bridge once per process.
+///
+/// Routes whisper.cpp/ggml diagnostics through `tracing` so they appear in log
+/// files at the appropriate levels. Without this, whisper.cpp prints everything
+/// directly to stderr, bypassing the application's logging infrastructure.
+fn install_whisper_logging() {
+    static INIT: Once = Once::new();
+    INIT.call_once(|| unsafe {
+        whisper_cpp_plus::whisper_cpp_plus_sys::whisper_log_set(
+            Some(whisper_log_bridge),
+            std::ptr::null_mut(),
+        );
+        tracing::debug!("🔧 whisper.cpp log bridge installed");
+    });
+}
+
+/// FFI callback: receives whisper.cpp/ggml log lines and forwards them to tracing.
+unsafe extern "C" fn whisper_log_bridge(
+    level: ggml_log_level,
+    text: *const std::ffi::c_char,
+    _user_data: *mut std::ffi::c_void,
+) {
+    if text.is_null() {
+        return;
+    }
+    let msg = unsafe { CStr::from_ptr(text) }.to_string_lossy();
+    let trimmed = msg.trim_end();
+    if trimmed.is_empty() {
+        return;
+    }
+    match level {
+        4 => tracing::error!("🧠 whisper: {trimmed}"),   // GGML_LOG_LEVEL_ERROR
+        3 => tracing::warn!("🧠 whisper: {trimmed}"),    // GGML_LOG_LEVEL_WARN
+        1 | 2 => tracing::debug!("🧠 whisper: {trimmed}"), // DEBUG | INFO
+        _ => tracing::trace!("🧠 whisper: {trimmed}"),
+    }
 }
 
 impl Transcriber {
@@ -17,22 +58,16 @@ impl Transcriber {
             anyhow::bail!(
                 "Whisper model not found at `{}`.\n\
                  Download a ggml model from https://huggingface.co/ggerganov/whisper.cpp\n\
-                 Recommended: ggml-base.bin (~142 MB) or ggml-tiny.bin (~78 MB).",
+                 Recommended: ggml-base.bin (~142\u{202f}MB) or ggml-tiny.bin (~78\u{202f}MB).",
                 model_path.display()
             );
         }
 
-        // Route whisper.cpp/ggml output through the `log` crate at debug level.
-        // With log_level >= info, this output won't reach the console.
-        whisper_rs::install_logging_hooks();
+        // Install once: whisper.cpp diagnostics → tracing log files
+        install_whisper_logging();
 
-        let params = whisper_rs::WhisperContextParameters::default();
-
-        let ctx =
-            whisper_rs::WhisperContext::new_with_params(&model_path.to_string_lossy(), params)
-                .context(
-                    "Failed to load Whisper model — the file may be corrupted or unsupported.",
-                )?;
+        let ctx = whisper_cpp_plus::WhisperContext::new(model_path)
+            .context("Failed to load Whisper model — the file may be corrupted or unsupported.")?;
 
         tracing::info!("✅ Whisper model loaded: {}", model_path.display());
         Ok(Self { ctx, language })
@@ -62,69 +97,56 @@ impl Transcriber {
             );
         }
 
-        let mut inter_samples = vec![0.0f32; audio.len()];
-        whisper_rs::convert_integer_to_float_audio(audio, &mut inter_samples)
-            .context("Failed to convert i16 → f32 audio")?;
+        // Convert i16 → f32 (whisper-cpp-plus expects 16kHz mono f32)
+        let f32_samples: Vec<f32> = audio
+            .iter()
+            .map(|&s| s as f32 / 32768.0f32)
+            .collect();
 
-        let f32_min = inter_samples.iter().cloned().fold(f32::INFINITY, f32::min);
-        let f32_max = inter_samples
+        let f32_min = f32_samples.iter().cloned().fold(f32::INFINITY, f32::min);
+        let f32_max = f32_samples
             .iter()
             .cloned()
             .fold(f32::NEG_INFINITY, f32::max);
         tracing::info!("🔍 f32 range: [{f32_min:.6}, {f32_max:.6}]");
 
-        let mut state = self.ctx.create_state()?;
-
-        let mut params =
-            whisper_rs::FullParams::new(whisper_rs::SamplingStrategy::Greedy { best_of: 1 });
-        params.set_n_threads(
-            std::thread::available_parallelism()
-                .map(|n| n.get() as i32)
-                .unwrap_or(2),
+        // Use FullParams directly to access print_* suppression flags.
+        // TranscriptionParamsBuilder does not expose them.
+        let mut params = whisper_cpp_plus::FullParams::new(
+            whisper_cpp_plus::SamplingStrategy::Greedy { best_of: 1 },
         );
-        params.set_translate(false);
+        params = params
+            .n_threads(
+                std::thread::available_parallelism()
+                    .map(|n| n.get() as i32)
+                    .unwrap_or(2),
+            )
+            .print_progress(false)
+            .print_timestamps(false)
+            .print_special(false)
+            .print_realtime(false);
 
-        match self.language.as_deref() {
-            Some("auto") | None => {
-                params.set_language(Some("auto"));
-            }
+        params = match self.language.as_deref() {
+            Some("auto") | None => params.language("auto"),
             Some(code) => {
-                params.set_language(Some(code));
                 tracing::info!("🌐 Language forced: {code}");
+                params.language(code)
             }
-        }
+        };
 
-        // Suppress all whisper.cpp output to stderr
-        params.set_print_special(false);
-        params.set_print_progress(false);
-        params.set_print_realtime(false);
-        params.set_print_timestamps(false);
+        let result = self
+            .ctx
+            .transcribe_with_full_params(&f32_samples, params)
+            .context("whisper_full failed")?;
 
-        let ret = state.full(params, &inter_samples[..])?;
-        tracing::info!("🔍 whisper_full returned: {ret}");
-
-        let n_segments = state.full_n_segments();
-        let lang_id = state.full_lang_id_from_state();
-        tracing::info!("🔍 Segments: {n_segments}, lang_id: {lang_id}");
-
-        for i in 0..n_segments {
-            if let Some(seg) = state.get_segment(i) {
-                tracing::info!(
-                    "🔍 seg[{i}]: \"{text}\" (no_speech_prob={nsp:.4})",
-                    text = seg.to_string(),
-                    nsp = seg.no_speech_probability(),
-                );
-            }
-        }
-
-        let text: String = state.as_iter().map(|seg| seg.to_string()).collect();
-
+        let text: String = result.segments.iter().map(|s| s.text.as_str()).collect();
         let trimmed = text.trim().to_string();
+
         if trimmed.is_empty() {
+            let n_segments = result.segments.len();
             tracing::warn!(
                 "🔍 Empty transcription result — {n_segments} segments, \
                  {dur:.2}s of audio",
-                n_segments = n_segments,
                 dur = duration_s,
             );
         }
