@@ -106,11 +106,13 @@ fn get_status() -> StatusDto {
 #[tauri::command]
 fn start_service() -> Result<(), String> {
     if let Some(state) = get_global_state() {
+        // Lock in consistent order (config → is_running) to avoid deadlock
+        // with get_status which acquires the same locks in the same order.
+        let config = state.config.lock().unwrap().clone();
         let mut running = state.is_running.lock().unwrap();
         if *running {
             return Err("Service already running".to_string());
         }
-        let config = state.config.lock().unwrap().clone();
         let last_transcription = state.last_transcription.clone();
         let is_recording = state.is_recording.clone();
         let app_config = state.config.clone();
