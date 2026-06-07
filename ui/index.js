@@ -150,7 +150,7 @@ function buildConfigFromForm() {
         log_dir: document.getElementById('logDir').value.trim() || 'logs',
         log_level: document.getElementById('logLevel').value,
         log_format: document.getElementById('logFormat').value,
-        log_retention_hours: parseInt(document.getElementById('logRetention').value) || 24
+        log_retention_hours: parseInt(document.getElementById('logRetention').value) ?? 24
     };
 }
 
@@ -285,7 +285,7 @@ function fillConfigForm(config) {
     document.getElementById('logDir').value = config.log_dir || '';
     document.getElementById('logLevel').value = config.log_level || 'info';
     document.getElementById('logFormat').value = config.log_format || 'text';
-    document.getElementById('logRetention').value = config.log_retention_hours || 24;
+    document.getElementById('logRetention').value = config.log_retention_hours ?? 24;
 }
 
 function updateButtonAppearance() {
