@@ -426,7 +426,9 @@ async fn download_model(model_id: String, target_dir: String) -> Result<String, 
 
     // Create directory if it doesn't exist
     if let Some(parent) = target_path.parent() {
-        fs::create_dir_all(parent).map_err(|e| format!("Failed to create directory: {}", e))?;
+        tokio::fs::create_dir_all(parent)
+            .await
+            .map_err(|e| format!("Failed to create directory: {}", e))?;
     }
 
     let client = Client::new();
