@@ -367,9 +367,7 @@ fn monitor_device_changes(
 
                     // 1. If currently recording, force-stop immediately
                     if state.is_recording.load(Ordering::SeqCst) {
-                        warn!(
-                            "⚠ Device disconnected during active recording — forcing stop"
-                        );
+                        warn!("⚠ Device disconnected during active recording — forcing stop");
                         state.stop_recording();
                     }
 
@@ -387,10 +385,7 @@ fn monitor_device_changes(
                             info!("✅ Recorder reinitialized for: {}", first.name);
                         }
                         Err(e) => {
-                            error!(
-                                "❌ Failed to create recorder for new device: {}",
-                                e
-                            );
+                            error!("❌ Failed to create recorder for new device: {}", e);
                             continue; // Skip config update — keep trying on next poll
                         }
                     }

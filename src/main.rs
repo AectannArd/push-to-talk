@@ -348,8 +348,8 @@ pub struct DownloadableModel {
 }
 
 /// Static catalog of all models available for download.
-static MODEL_CATALOG: once_cell::sync::Lazy<Vec<DownloadableModel>> =
-    once_cell::sync::Lazy::new(|| {
+static MODEL_CATALOG: once_cell::sync::Lazy<Vec<DownloadableModel>> = once_cell::sync::Lazy::new(
+    || {
         vec![
             DownloadableModel {
                 id: "tiny".into(),
@@ -393,7 +393,8 @@ static MODEL_CATALOG: once_cell::sync::Lazy<Vec<DownloadableModel>> =
                 url: "https://huggingface.co/Pomni/whisper-large-v3-russian-ggml-allquants/resolve/main/ggml-large-v3-russian-f16.bin".into(),
             },
         ]
-    });
+    },
+);
 
 #[tauri::command]
 fn get_downloadable_models() -> Vec<DownloadableModel> {
@@ -813,12 +814,14 @@ fn main() {
                 }
             }
 
-            // System tray with menu (Configure / Quit)
+            // System tray with menu (Configure / Quit) + double-click to show
             {
                 use tauri::menu::{Menu, MenuItem};
-                use tauri::tray::TrayIconBuilder;
+                use tauri::tray::{TrayIconBuilder, TrayIconEvent};
 
                 let config_clone = app_state_arc.config.clone();
+                let config_dbl = app_state_arc.config.clone();
+                let app_handle = app.handle().clone();
                 let show_i = MenuItem::with_id(app, "show", "Configure", true, None::<&str>)?;
                 let quit_i = MenuItem::with_id(app, "quit", "Quit", true, None::<&str>)?;
                 let menu = Menu::with_items(app, &[&show_i, &quit_i])?;
@@ -831,8 +834,25 @@ fn main() {
                     tray_builder = tray_builder.icon(icon);
                 }
 
-                tray_builder =
-                    tray_builder.on_menu_event(move |app, event| match event.id.as_ref() {
+                tray_builder = tray_builder
+                    .on_tray_icon_event(move |_tray, event| {
+                        if let TrayIconEvent::DoubleClick { .. } = event {
+                            if let Some(window) = app_handle.get_webview_window("main") {
+                                if !window.is_visible().unwrap_or(false) {
+                                    let _ = window.show();
+                                    let _ = window.set_focus();
+                                    let mut config = config_dbl.lock().unwrap();
+                                    config.window_hidden = false;
+                                    let config_path = crate::config::default_path();
+                                    config.save(&config_path);
+                                    tracing::info!(
+                                        "🪟 Window shown via double-click (window_hidden=false)"
+                                    );
+                                }
+                            }
+                        }
+                    })
+                    .on_menu_event(move |app, event| match event.id.as_ref() {
                         "show" => {
                             if let Some(window) = app.get_webview_window("main") {
                                 let _ = window.show();

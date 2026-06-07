@@ -302,7 +302,14 @@ pub fn list_input_devices() -> Result<Vec<DeviceInfo>> {
                 .unwrap_or_else(|_| "<unknown>".into());
             let config = d
                 .default_input_config()
-                .map(|c| format!("{} ch, {} Hz, {:?}", c.channels(), c.sample_rate(), c.sample_format()))
+                .map(|c| {
+                    format!(
+                        "{} ch, {} Hz, {:?}",
+                        c.channels(),
+                        c.sample_rate(),
+                        c.sample_format()
+                    )
+                })
                 .unwrap_or_else(|_| "n/a".into());
             DeviceInfo {
                 id,

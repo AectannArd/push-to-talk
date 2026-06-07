@@ -42,8 +42,8 @@ unsafe extern "C" fn whisper_log_bridge(
         return;
     }
     match level {
-        4 => tracing::error!("🧠 whisper: {trimmed}"),   // GGML_LOG_LEVEL_ERROR
-        3 => tracing::warn!("🧠 whisper: {trimmed}"),    // GGML_LOG_LEVEL_WARN
+        4 => tracing::error!("🧠 whisper: {trimmed}"), // GGML_LOG_LEVEL_ERROR
+        3 => tracing::warn!("🧠 whisper: {trimmed}"),  // GGML_LOG_LEVEL_WARN
         1 | 2 => tracing::debug!("🧠 whisper: {trimmed}"), // DEBUG | INFO
         _ => tracing::trace!("🧠 whisper: {trimmed}"),
     }
@@ -98,10 +98,7 @@ impl Transcriber {
         }
 
         // Convert i16 → f32 (whisper-cpp-plus expects 16kHz mono f32)
-        let f32_samples: Vec<f32> = audio
-            .iter()
-            .map(|&s| s as f32 / 32768.0f32)
-            .collect();
+        let f32_samples: Vec<f32> = audio.iter().map(|&s| s as f32 / 32768.0f32).collect();
 
         let f32_min = f32_samples.iter().cloned().fold(f32::INFINITY, f32::min);
         let f32_max = f32_samples
@@ -112,9 +109,10 @@ impl Transcriber {
 
         // Use FullParams directly to access print_* suppression flags.
         // TranscriptionParamsBuilder does not expose them.
-        let mut params = whisper_cpp_plus::FullParams::new(
-            whisper_cpp_plus::SamplingStrategy::Greedy { best_of: 1 },
-        );
+        let mut params =
+            whisper_cpp_plus::FullParams::new(whisper_cpp_plus::SamplingStrategy::Greedy {
+                best_of: 1,
+            });
         params = params
             .n_threads(
                 std::thread::available_parallelism()
