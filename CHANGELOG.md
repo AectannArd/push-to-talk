@@ -8,20 +8,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
-- Interactive device selection with system IDs (stable across reboots)
-- Colored CLI wizard using `console` and `indicatif` libraries
-- Progress bars for model download and initialization
-- Hotkey hold detection to prevent repeat triggers
-- HuggingFace model download from config UI
+- Russian fine-tuned Whisper model (`ggml-large-v3-russian-f16.bin`) from `Pomni/whisper-large-v3-russian-ggml-allquants`
+- Model catalog on backend (`get_downloadable_models` command) — each model stores its full HuggingFace URL, so branch/repo are per-model, not hardcoded
+- whisper.cpp → `tracing` log bridge via FFI (`whisper_log_set`): diagnostics appear in log files at `debug`/`trace` level
 
 ### Changed
-- Config now stores `device_id` (system ID) instead of just device name
-- UI migrated to Tauri WebView frontend (`ui/`)
-- Improved error messages and user feedback
+- **whisper-rs → whisper-cpp-plus** (0.15 → 0.1): `TranscriptionParams` → `FullParams` with `print_*` suppression flags
+- `download_model` now accepts `model_id` (catalog ID) instead of arbitrary `model_name` + `repo` — unknown IDs are rejected
+- i16→f32 audio normalization: `32768.0` divisor (canonical whisper.cpp convention) instead of `i16::MAX`
+- Log file extension matches format: `.txt` for text, `.json` for JSON (previously always `.log`)
+
+### Removed
+- CoreML acceleration on macOS (whisper-cpp-plus uses Metal only)
+- `log_backend` cargo feature (whisper-cpp-plus has no equivalent; diagnostics bridged via FFI)
 
 ### Fixed
-- Cyclic key repeat on hotkey hold
-- Device selection persistence across reboots
+- `log_format` config field now actually respected — previously ignored, file layer always used default format
+- Model radio-button selection now re-renders immediately (snapshot optimisation reset on click)
 
 ## [0.1.0] - 2024-06-02
 

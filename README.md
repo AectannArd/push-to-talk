@@ -50,7 +50,7 @@ mkdir -p ~/.push-to-talk/models
 curl -Lo ~/.push-to-talk/models/ggml-base.bin \
   https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-base.bin
 
-# 2. Build (Metal + CoreML acceleration, no extra toolchain)
+# 2. Build (Metal GPU acceleration, no extra toolchain)
 cargo build --release
 
 # 3. Grant Accessibility permission (required for auto-paste)
@@ -101,7 +101,7 @@ model_search_dirs = ["D:\\development\\models"]
 hotkey = "Insert"                    # global shortcut
 log_dir = "C:\\Users\\...\\logs"
 log_level = "warn"                   # trace, debug, info, warn, error
-log_format = "text"                  # text or json
+log_format = "text"                  # text (.txt) or json (.json) — file extension matches format
 log_retention_hours = 1
 window_hidden = false                # start minimized to tray
 ```
@@ -119,7 +119,7 @@ window_hidden = false                # start minimized to tray
 
 - **Auto-scanning** — model directories are scanned every 5 seconds in the background
 - **Selection** — click a model in the list (○/● radio) to use it for transcription
-- **Download** — choose a model from the dropdown and click ⬇️ Download; already-downloaded models are hidden from the list
+- **Download** — choose a model from the dropdown and click ⬇️ Download; the catalog of available models is maintained on the backend (`DownloadableModel` entries with full HuggingFace URLs), so each model can come from any repo/branch. Already-downloaded models are hidden from the list
 - **Resolution** — `model` field in config → scan `model_search_dirs` → first match wins
 
 ### Language switching
@@ -134,7 +134,7 @@ src/
 ├── main.rs           Tauri entry point, IPC commands, global state, tray, logging
 ├── config.rs         TOML config at ~/.push-to-talk/config.toml
 ├── recorder.rs       Audio capture via cpal (i16 on Windows, f32 on macOS/Linux)
-├── transcriber.rs    Whisper.cpp wrapper (whisper-rs), greedy decoding
+├── transcriber.rs    Whisper.cpp wrapper (whisper-cpp-plus), log bridge, greedy decoding
 └── voice_service.rs  Background orchestrator: recorder + transcriber + clipboard
 ui/
 ├── index.html        Tauri WebView frontend
@@ -146,7 +146,7 @@ ui/
 
 | Feature | Windows | macOS | Linux |
 |---------|---------|-------|-------|
-| GPU acceleration | CUDA | Metal + CoreML | CPU only |
+| GPU acceleration | CUDA | Metal | CPU only |
 | Audio format | i16 (WASAPI) | f32 (CoreAudio) | f32 (ALSA/Pulse) |
 | Auto-paste | `keybd_event` Ctrl+V | AppleScript Cmd+V | Manual |
 | System tray | ✓ | ✓ | ✓ |
@@ -162,7 +162,9 @@ If the configured audio device disconnects while recording:
 
 ## Logging
 
-- **Files:** `log_dir/push-to-talk.YYYY-MM-DD-HH-mm.log` with 1-minute rotation
+- **Files:** `log_dir/push-to-talk.YYYY-MM-DD-HH-mm.{txt,json}` with 1-minute rotation
+- **Format:** controlled by `log_format` in config — `"text"` produces `.txt` files (human-readable), `"json"` produces `.json` files (structured)
+- **Diagnostics:** whisper.cpp internal logging is bridged to `tracing` — at `debug` level, model diagnostics appear in log files
 - **Retention:** files older than `log_retention_hours` are cleaned up hourly
 - **Levels:** default `warn` — shows hotkey registration and diagnostics in log files
 - **Console:** suppressed on Windows (`#![windows_subsystem = "windows"]`)
@@ -178,7 +180,7 @@ If the configured audio device disconnects while recording:
 | Microphone | ✓ | ✓ |
 
 To build without GPU acceleration, remove the platform GPU features from
-`whisper-rs` in `Cargo.toml` (`cuda` on Windows, `metal`/`coreml` on macOS).
+`whisper-cpp-plus` in `Cargo.toml` (`cuda` on Windows, `metal` on macOS).
 
 ## Contributing
 
