@@ -340,6 +340,11 @@ document.addEventListener('keydown', async (e) => {
         if (isServiceRunning) {
             try {
                 await invoke('trigger_recording');
+                uiIsRecording = !uiIsRecording;
+                if (!uiIsRecording) {
+                    uiTranscriptionPending = true;
+                }
+                updateButtonAppearance();
                 pollStatus();
             } catch (error) {
                 showStatus('Failed: ' + error, 'error');
