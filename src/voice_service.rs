@@ -215,28 +215,35 @@ fn run_service_loop(stop_flag: Arc<AtomicBool>) {
     info!("👋 Voice service stopped");
 }
 
+/// Enumerate all ggml-*.bin model files found in the given directories.
+/// Expands `~` in each directory path.
+pub fn list_ggml_models(dirs: &[String]) -> Vec<std::path::PathBuf> {
+    let mut paths = Vec::new();
+    for dir in dirs {
+        let expanded = shellexpand::tilde(dir);
+        let path = std::path::Path::new(expanded.as_ref());
+        if path.exists() {
+            if let Ok(entries) = std::fs::read_dir(path) {
+                for entry in entries.flatten() {
+                    let name = entry.file_name();
+                    let name = name.to_string_lossy();
+                    if name.starts_with("ggml-") && name.ends_with(".bin") {
+                        paths.push(entry.path());
+                    }
+                }
+            }
+        }
+    }
+    paths
+}
+
 fn find_model(config: &Config) -> Option<std::path::PathBuf> {
     if let Some(ref model) = config.model {
         if Path::new(model).exists() {
             return Some(std::path::PathBuf::from(model));
         }
     }
-
-    for dir in &config.model_search_dirs {
-        let expanded = shellexpand::tilde(dir);
-        let path = std::path::Path::new(expanded.as_ref());
-        if path.exists() {
-            for entry in std::fs::read_dir(path).ok()? {
-                let entry = entry.ok()?;
-                let name = entry.file_name().to_string_lossy().to_string();
-                if name.starts_with("ggml-") && name.ends_with(".bin") {
-                    return Some(entry.path());
-                }
-            }
-        }
-    }
-
-    None
+    list_ggml_models(&config.model_search_dirs).into_iter().next()
 }
 
 #[cfg(target_os = "macos")]

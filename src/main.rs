@@ -9,7 +9,6 @@ mod voice_service;
 
 use once_cell::sync::OnceCell;
 use serde::{Deserialize, Serialize};
-use std::fs;
 use std::path::Path;
 use std::sync::{
     atomic::{AtomicBool, Ordering},
@@ -300,38 +299,19 @@ fn get_current_device() -> Result<Option<DeviceDto>, String> {
 
 #[tauri::command]
 fn scan_models(model_search_dirs: Vec<String>) -> Result<Vec<ModelDto>, String> {
-    let mut models = Vec::new();
-
-    for dir_str in model_search_dirs {
-        let dir = shellexpand::tilde(&dir_str).to_string();
-        let dir_path = Path::new(&dir);
-
-        if !dir_path.exists() {
-            continue;
-        }
-
-        let entries = fs::read_dir(dir_path)
-            .map_err(|e| format!("Failed to read directory {}: {}", dir, e))?;
-
-        for entry in entries.flatten() {
-            let path = entry.path();
-            if path.is_file() {
-                if let Some(name) = path.file_name().and_then(|n| n.to_str()) {
-                    if name.starts_with("ggml-") && name.ends_with(".bin") {
-                        let metadata = fs::metadata(&path)
-                            .map_err(|e| format!("Failed to get metadata: {}", e))?;
-                        let size = format_size(metadata.len());
-
-                        models.push(ModelDto {
-                            filename: name.to_string(),
-                            path: path.to_string_lossy().to_string(),
-                            size,
-                        });
-                    }
-                }
-            }
-        }
-    }
+    let mut models: Vec<ModelDto> = voice_service::list_ggml_models(&model_search_dirs)
+        .into_iter()
+        .filter_map(|path| {
+            let filename = path.file_name()?.to_str()?.to_string();
+            let metadata = path.metadata().ok()?;
+            let size = format_size(metadata.len());
+            Some(ModelDto {
+                filename,
+                path: path.to_string_lossy().to_string(),
+                size,
+            })
+        })
+        .collect();
 
     // Remove duplicates and sort
     models.sort_by(|a, b| a.filename.cmp(&b.filename));
