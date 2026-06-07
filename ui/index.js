@@ -351,6 +351,7 @@ document.addEventListener('keydown', async (e) => {
 // Scan model directories and refresh the UI. Returns the found models.
 // Skips DOM update if the result is identical to the last scan.
 async function scanModels() {
+    const modelListEl = document.getElementById('modelList');
     try {
         const config = buildConfigFromForm();
         const models = await invoke('scan_models', { modelSearchDirs: config.model_search_dirs });
@@ -361,8 +362,6 @@ async function scanModels() {
             return models;
         }
         lastModelScan = snapshot;
-
-        const modelListEl = document.getElementById('modelList');
 
         if (models.length === 0) {
             modelListEl.innerHTML = '<p style="color: #888;">No models found. Download a model or update search directories.</p>';
