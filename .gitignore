@@ -7,3 +7,4 @@
 **/.nessy
 **/dist
 **/crash_report*
+**/ort-dylibs

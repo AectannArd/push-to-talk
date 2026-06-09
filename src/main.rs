@@ -3,6 +3,7 @@
 #![windows_subsystem = "windows"]
 
 mod config;
+mod punctuator;
 mod recorder;
 mod transcriber;
 mod voice_service;
@@ -26,6 +27,7 @@ pub struct AppState {
     pub config: Arc<Mutex<config::Config>>,
     pub is_recording: Arc<AtomicBool>,
     pub last_transcription: Arc<Mutex<Option<String>>>,
+    pub punctuator: Arc<Mutex<Option<punctuator::Punctuator>>>,
 }
 
 /// Device info for frontend dropdown
@@ -53,6 +55,7 @@ impl AppState {
             config: Arc::new(Mutex::new(config::Config::default())),
             is_recording: Arc::new(AtomicBool::new(false)),
             last_transcription: Arc::new(Mutex::new(None)),
+            punctuator: Arc::new(Mutex::new(None)),
         }
     }
 }
@@ -115,12 +118,14 @@ fn start_service() -> Result<(), String> {
         let last_transcription = state.last_transcription.clone();
         let is_recording = state.is_recording.clone();
         let app_config = state.config.clone();
+        let punctuator = state.punctuator.clone();
 
         match voice_service::VoiceServiceHandle::start(
             config,
             last_transcription,
             is_recording,
             app_config,
+            punctuator,
         ) {
             Ok(handle) => {
                 *state.voice_service.lock().unwrap() = Some(handle);
@@ -224,6 +229,36 @@ fn save_config(app: tauri::AppHandle, mut cfg: config::Config) -> Result<(), Str
                 .unwrap()
                 .set_language(new_language.clone());
             tracing::info!("🌐 Language updated to {:?} (immediate)", new_language);
+        }
+    }
+
+    // Reload punctuator if punctuation_enabled changed
+    // (takes effect after service restart — same pattern as hotkey changes)
+    {
+        let old_punc_enabled = {
+            let mut guard = state.punctuator.lock().unwrap();
+            let was_enabled = guard.is_some();
+            // If disabled now or was disabled before, clear/reload
+            if !cfg.punctuation_enabled {
+                *guard = None;
+            }
+            was_enabled
+        };
+        if cfg.punctuation_enabled && !old_punc_enabled {
+            // Try to load the punctuator
+            match punctuator::Punctuator::from_config(&cfg) {
+                Ok(punc) => {
+                    tracing::info!("✅ Punctuation restoration enabled (via config save)");
+                    *state.punctuator.lock().unwrap() = Some(punc);
+                }
+                Err(e) => {
+                    tracing::warn!(
+                        "⚠ Punctuation model not available: {} — \
+                         enable will take effect once model is placed",
+                        e
+                    );
+                }
+            }
         }
     }
 
@@ -455,6 +490,114 @@ async fn download_model(model_id: String, target_dir: String) -> Result<String, 
         "Downloaded {} to {}",
         entry.name,
         target_path.display()
+    ))
+}
+
+// ── Punctuation model download ───────────────────────────────────
+
+const PUNCTUATION_MODEL_URL: &str =
+    "https://huggingface.co/Aectann/punctuation-case-model/resolve/main/model.onnx";
+const PUNCTUATION_TOKENIZER_URL: &str =
+    "https://huggingface.co/Aectann/punctuation-case-model/resolve/main/tokenizer.json";
+
+/// Result of checking whether the punctuation model is present.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PunctuationModelStatus {
+    pub found: bool,
+    pub model_path: Option<String>,
+    pub onnx_url: String,
+    pub tokenizer_url: String,
+}
+
+#[tauri::command]
+fn check_punctuation_model(model_search_dirs: Vec<String>) -> PunctuationModelStatus {
+    let model_path = punctuator::find_punctuation_model(&model_search_dirs);
+    PunctuationModelStatus {
+        found: model_path.is_some(),
+        model_path: model_path.map(|p| p.to_string_lossy().to_string()),
+        onnx_url: PUNCTUATION_MODEL_URL.to_string(),
+        tokenizer_url: PUNCTUATION_TOKENIZER_URL.to_string(),
+    }
+}
+
+#[tauri::command]
+async fn download_punctuation_model(target_dir: String) -> Result<String, String> {
+    use futures_util::StreamExt;
+    use reqwest::Client;
+    use tokio::io::AsyncWriteExt;
+
+    let target_dir = shellexpand::tilde(&target_dir).to_string();
+    let target_dir = Path::new(&target_dir).join("punctuator");
+
+    // Create target directory
+    tokio::fs::create_dir_all(&target_dir)
+        .await
+        .map_err(|e| format!("Failed to create directory: {}", e))?;
+
+    let files: &[(&str, &str, &str)] = &[
+        ("model.onnx", PUNCTUATION_MODEL_URL, "model.onnx.part"),
+        ("tokenizer.json", PUNCTUATION_TOKENIZER_URL, "tokenizer.json.part"),
+    ];
+
+    let client = Client::new();
+    let mut results = Vec::new();
+
+    for (name, url, part_ext) in files {
+        let target_path = target_dir.join(name);
+        let part_path = target_dir.join(part_ext);
+
+        tracing::info!("⬇️ Downloading {} ({})...", name, target_dir.display());
+
+        let response = client
+            .get(*url)
+            .send()
+            .await
+            .map_err(|e| format!("Failed to start download for {name}: {e}"))?;
+
+        if !response.status().is_success() {
+            return Err(format!("Download failed for {name}: HTTP {}", response.status()));
+        }
+
+        let total_size = response.content_length();
+
+        let mut file = tokio::fs::File::create(&part_path)
+            .await
+            .map_err(|e| format!("Failed to create file: {}", e))?;
+
+        let mut downloaded: u64 = 0;
+        let mut stream = response.bytes_stream();
+
+        while let Some(chunk) = stream.next().await {
+            let chunk = chunk.map_err(|e| format!("Download error: {}", e))?;
+            file.write_all(&chunk)
+                .await
+                .map_err(|e| format!("Write error: {}", e))?;
+
+            downloaded += chunk.len() as u64;
+            if let Some(total) = total_size {
+                let progress = (downloaded as f64 / total as f64 * 100.0) as u32;
+                tracing::info!("⬇️ Downloading {name}: {progress}%");
+            } else {
+                let mb = downloaded as f64 / (1024.0 * 1024.0);
+                tracing::info!("⬇️ Downloading {name}: {:.1} MB", mb);
+            }
+        }
+
+        // Atomically promote
+        std::fs::rename(&part_path, &target_path)
+            .map_err(|e| format!("Failed to finalize {name}: {}", e))?;
+
+        let size_mb = target_path
+            .metadata()
+            .map(|m| m.len() as f64 / (1024.0 * 1024.0))
+            .unwrap_or(0.0);
+        tracing::info!("✅ Downloaded {name} ({size_mb:.0} MB)");
+        results.push(format!("{name} ({size_mb:.0} MB)"));
+    }
+
+    Ok(format!(
+        "Punctuation model downloaded to {}",
+        target_dir.display()
     ))
 }
 
@@ -695,6 +838,39 @@ fn main() {
         eprintln!("🚨 PANIC: {}", panic_info);
     }));
 
+    // Discover ONNX Runtime native library for punctuation restoration.
+    // Tauri bundles it as a resource; location varies by platform:
+    //   Windows: next to the .exe
+    //   macOS:   Contents/Resources/ (one level up from MacOS/ binary)
+    //   Linux:   next to the binary
+    if std::env::var("ORT_DYLIB_PATH").is_err() {
+        if let Ok(exe_path) = std::env::current_exe() {
+            if let Some(exe_dir) = exe_path.parent() {
+                // Platform-specific library name and location
+                #[cfg(target_os = "windows")]
+                let (lib_name, search_dir) = ("onnxruntime.dll", exe_dir.to_path_buf());
+
+                #[cfg(target_os = "macos")]
+                let (lib_name, search_dir) = {
+                    // Binary: Contents/MacOS/push-to-talk
+                    // Resources: Contents/Resources/libonnxruntime.dylib
+                    let res_dir = exe_dir.parent().map(|p| p.join("Resources"));
+                    ("libonnxruntime.dylib", res_dir.unwrap_or_else(|| exe_dir.to_path_buf()))
+                };
+
+                #[cfg(target_os = "linux")]
+                let (lib_name, search_dir) = ("libonnxruntime.so", exe_dir.to_path_buf());
+
+                let lib_path = search_dir.join(lib_name);
+                if lib_path.exists() {
+                    std::env::set_var("ORT_DYLIB_PATH", lib_path);
+                    // Note: tracing is not initialized yet — the punctuator init
+                    // will log success/failure once logging is up.
+                }
+            }
+        }
+    }
+
     let config_path = config::default_path();
     let cfg = config::Config::load(&config_path);
 
@@ -707,6 +883,28 @@ fn main() {
 
     // Initialize global state BEFORE tauri::Builder
     let _ = APP_STATE.set(app_state_arc.clone());
+
+    // Initialize punctuation restoration if enabled in config
+    {
+        let cfg = app_state_arc.config.lock().unwrap();
+        if cfg.punctuation_enabled {
+            let result = punctuator::Punctuator::from_config(&cfg);
+            drop(cfg); // release lock before storing punctuator
+            match result {
+                Ok(punc) => {
+                    tracing::info!("✅ Punctuation restoration enabled");
+                    *app_state_arc.punctuator.lock().unwrap() = Some(punc);
+                }
+                Err(e) => {
+                    tracing::warn!(
+                        "⚠ Punctuation restoration unavailable: {} — \
+                         transcriptions will not be punctuated",
+                        e
+                    );
+                }
+            }
+        }
+    }
 
     tauri::Builder::default()
         .plugin(tauri_plugin_shell::init())
@@ -734,6 +932,8 @@ fn main() {
             scan_models,
             get_downloadable_models,
             download_model,
+            check_punctuation_model,
+            download_punctuation_model,
             frontend_log,
         ])
         .setup(move |app| {

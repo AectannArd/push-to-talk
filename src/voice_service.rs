@@ -38,6 +38,7 @@ impl VoiceServiceHandle {
         last_transcription: Arc<Mutex<Option<String>>>,
         app_is_recording: Arc<AtomicBool>,
         app_config: Arc<Mutex<Config>>,
+        punctuator: Arc<Mutex<Option<crate::punctuator::Punctuator>>>,
     ) -> Result<Self, anyhow::Error> {
         let stop_flag = Arc::new(AtomicBool::new(false));
 
@@ -81,6 +82,7 @@ impl VoiceServiceHandle {
         // Spawn the transcription thread (processes audio from the channel)
         let tr_clone = tr.clone();
         let should_paste_tx = should_paste_clone.clone();
+        let punc = punctuator.clone();
         let transcribe_handle = thread::spawn(move || {
             for audio in rx {
                 match tr_clone.lock().unwrap().transcribe(&audio) {
@@ -88,10 +90,30 @@ impl VoiceServiceHandle {
                         warn!("⚠ No speech detected");
                     }
                     Ok(text) => {
-                        info!("📝 \"{}\"", text);
-                        *last_tr.lock().unwrap() = Some(text.clone());
+                        info!("📝 Raw: \"{}\"", text);
+
+                        // ---- Punctuation restoration ----
+                        let final_text = match punc.lock().unwrap().as_mut() {
+                            Some(p) => match p.punctuate(&text) {
+                                Ok(punctuated) if !punctuated.is_empty() => {
+                                    info!("📝 Punctuated: \"{}\"", punctuated);
+                                    punctuated
+                                }
+                                Ok(_) => {
+                                    warn!("⚠ Punctuation returned empty — using raw text");
+                                    text
+                                }
+                                Err(e) => {
+                                    warn!("⚠ Punctuation failed: {} — using raw text", e);
+                                    text
+                                }
+                            },
+                            None => text,
+                        };
+
+                        *last_tr.lock().unwrap() = Some(final_text.clone());
                         if should_paste_tx.load(Ordering::Relaxed) {
-                            copy_to_clipboard(&text);
+                            copy_to_clipboard(&final_text);
                             info!("✅ Text copied to clipboard");
                             thread::sleep(Duration::from_millis(100));
                             paste_from_clipboard();
@@ -217,24 +239,41 @@ fn run_service_loop(stop_flag: Arc<AtomicBool>) {
 
 /// Enumerate all ggml-*.bin model files found in the given directories.
 /// Expands `~` in each directory path.
+/// Scans `<dir>/transcriber/` (primary location) and `<dir>/` (backward compat).
 pub fn list_ggml_models(dirs: &[String]) -> Vec<std::path::PathBuf> {
+    let mut seen = std::collections::HashSet::new();
     let mut paths = Vec::new();
     for dir in dirs {
         let expanded = shellexpand::tilde(dir);
-        let path = std::path::Path::new(expanded.as_ref());
-        if path.exists() {
-            if let Ok(entries) = std::fs::read_dir(path) {
-                for entry in entries.flatten() {
-                    let name = entry.file_name();
-                    let name = name.to_string_lossy();
-                    if name.starts_with("ggml-") && name.ends_with(".bin") {
-                        paths.push(entry.path());
-                    }
+        let base = std::path::Path::new(expanded.as_ref());
+        // Primary: <dir>/transcriber/
+        let transcriber_dir = base.join("transcriber");
+        scan_ggml_dir(&transcriber_dir, &mut paths, &mut seen);
+        // Backward compat: <dir>/ (models placed directly in root)
+        scan_ggml_dir(base, &mut paths, &mut seen);
+    }
+    paths
+}
+
+fn scan_ggml_dir(
+    dir: &std::path::Path,
+    paths: &mut Vec<std::path::PathBuf>,
+    seen: &mut std::collections::HashSet<String>,
+) {
+    if !dir.exists() {
+        return;
+    }
+    if let Ok(entries) = std::fs::read_dir(dir) {
+        for entry in entries.flatten() {
+            let name = entry.file_name();
+            let name_str = name.to_string_lossy().to_string();
+            if name_str.starts_with("ggml-") && name_str.ends_with(".bin") {
+                if seen.insert(name_str) {
+                    paths.push(entry.path());
                 }
             }
         }
     }
-    paths
 }
 
 fn find_model(config: &Config) -> Option<std::path::PathBuf> {

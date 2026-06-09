@@ -144,7 +144,7 @@ impl Recorder {
         let err_fn = |err| tracing::error!("⚠  Audio stream error: {err}");
 
         let stream = self.device.build_input_stream(
-            &stream_config,
+            stream_config,
             move |data: &[i16], _info: &cpal::InputCallbackInfo| {
                 let mut buf = buf.lock().unwrap();
                 let mut pos = pos.lock().unwrap();
@@ -220,7 +220,7 @@ impl Recorder {
         let err_fn = |err| tracing::error!("⚠  Audio stream error: {err}");
 
         let stream = self.device.build_input_stream(
-            &stream_config,
+            stream_config,
             move |data: &[f32], _info: &cpal::InputCallbackInfo| {
                 let mut buf = buf.lock().unwrap();
                 let mut pos = pos.lock().unwrap();

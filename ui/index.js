@@ -150,7 +150,8 @@ function buildConfigFromForm() {
         log_dir: document.getElementById('logDir').value.trim() || 'logs',
         log_level: document.getElementById('logLevel').value,
         log_format: document.getElementById('logFormat').value,
-        log_retention_hours: parseInt(document.getElementById('logRetention').value) ?? 24
+        log_retention_hours: parseInt(document.getElementById('logRetention').value) ?? 24,
+        punctuation_enabled: document.getElementById('punctuationEnabled').checked
     };
 }
 
@@ -176,7 +177,7 @@ function autoSaveConfig() {
 }
 
 // Auto-save on form field changes
-const autoSaveFields = ['hotkey', 'language', 'deviceSelect', 'modelSearchDirs', 'logDir', 'logLevel', 'logFormat', 'logRetention'];
+const autoSaveFields = ['hotkey', 'language', 'deviceSelect', 'modelSearchDirs', 'logDir', 'logLevel', 'logFormat', 'logRetention', 'punctuationEnabled'];
 autoSaveFields.forEach(id => {
     const el = document.getElementById(id);
     if (el) {
@@ -247,6 +248,9 @@ function updateStatusUI(status) {
     document.getElementById('serviceStatus').textContent = status.is_service_running ? 'Running' : 'Stopped';
     document.getElementById('recordingStatus').textContent = status.is_recording ? 'Yes' : 'No';
 
+    // Update punctuation status indicator
+    updatePunctuationStatus();
+
     // Update transcription ONLY after UI-initiated stop
     if (uiTranscriptionPending && status.last_transcription &&
         status.last_transcription !== lastDisplayedTranscription) {
@@ -286,6 +290,11 @@ function fillConfigForm(config) {
     document.getElementById('logLevel').value = config.log_level || 'info';
     document.getElementById('logFormat').value = config.log_format || 'text';
     document.getElementById('logRetention').value = config.log_retention_hours ?? 24;
+    // Punctuation
+    document.getElementById('punctuationEnabled').checked = config.punctuation_enabled || false;
+    document.getElementById('punctuationModelGroup').style.display =
+        config.punctuation_enabled ? 'block' : 'none';
+    updatePunctuationStatus();
 }
 
 function updateButtonAppearance() {
@@ -414,6 +423,194 @@ async function scanModels() {
 setInterval(() => {
     scanModels();
 }, 5000);
+
+// ── Punctuation toggle ────────────────────────────────────────
+
+let punctuationToggleBusy = false; // prevent re-entrant toggle during download
+
+document.getElementById('punctuationEnabled').addEventListener('change', async function () {
+    const enabled = this.checked;
+    document.getElementById('punctuationModelGroup').style.display =
+        enabled ? 'block' : 'none';
+
+    if (!enabled) {
+        autoSaveConfig();
+        return;
+    }
+
+    // Check if model exists — if not, show download dialog
+    if (punctuationToggleBusy) return;
+    punctuationToggleBusy = true;
+
+    try {
+        const config = buildConfigFromForm();
+        const status = await invoke('check_punctuation_model', {
+            modelSearchDirs: config.model_search_dirs
+        });
+        if (status.found) {
+            updatePunctuationStatus();
+            autoSaveConfig();
+        } else {
+            // Model missing — show download dialog
+            showDownloadModal();
+        }
+    } catch (e) {
+        console.error('Failed to check punctuation model:', e);
+        autoSaveConfig();
+    } finally {
+        punctuationToggleBusy = false;
+    }
+});
+
+// Explicit download button in punctuation section
+document.getElementById('downloadPunctuationBtn').addEventListener('click', async () => {
+    const config = buildConfigFromForm();
+    await startPunctuationDownload(config.model_search_dirs[0], 'punctuationDownloadProgress');
+});
+
+function showDownloadModal() {
+    const modal = document.getElementById('downloadModal');
+    modal.classList.add('active');
+
+    // Reset modal state
+    document.getElementById('modalProgress').classList.remove('active');
+    document.getElementById('modalDownload').disabled = false;
+    document.getElementById('modalDownload').textContent = 'Yes, Download';
+    document.getElementById('modalCancel').disabled = false;
+
+    // One-time handlers (remove old, add fresh)
+    const dlBtn = document.getElementById('modalDownload');
+    const cancelBtn = document.getElementById('modalCancel');
+    const oldDl = dlBtn.cloneNode(true);
+    const oldCancel = cancelBtn.cloneNode(true);
+    dlBtn.parentNode.replaceChild(oldDl, dlBtn);
+    cancelBtn.parentNode.replaceChild(oldCancel, cancelBtn);
+
+    document.getElementById('modalDownload').addEventListener('click', async () => {
+        const config = buildConfigFromForm();
+        const targetDir = config.model_search_dirs[0];
+        if (!targetDir) {
+            alert('No model search directory configured. Please set one in the Whisper Model section.');
+            closeDownloadModal(false);
+            return;
+        }
+        await startPunctuationDownload(targetDir, 'modalProgress', true);
+    });
+
+    document.getElementById('modalCancel').addEventListener('click', () => {
+        closeDownloadModal(false);
+    });
+}
+
+function closeDownloadModal(downloaded) {
+    document.getElementById('downloadModal').classList.remove('active');
+    if (!downloaded) {
+        // Turn toggle back OFF
+        const toggle = document.getElementById('punctuationEnabled');
+        toggle.checked = false;
+        document.getElementById('punctuationModelGroup').style.display = 'none';
+        autoSaveConfig();
+    }
+}
+
+async function startPunctuationDownload(targetDir, progressPrefix, isModal = false) {
+    const progressEl = document.getElementById(progressPrefix);
+    const fillEl = document.getElementById(progressPrefix === 'modalProgress' ? 'modalProgressFill' : 'progressFill');
+    const fileEl = document.getElementById(progressPrefix === 'modalProgress' ? 'modalProgressFile' : 'progressFile');
+    const pctEl = document.getElementById(progressPrefix === 'modalProgress' ? 'modalProgressPercent' : 'progressPercent');
+
+    if (isModal) {
+        document.getElementById('modalDownload').disabled = true;
+        document.getElementById('modalDownload').textContent = 'Downloading...';
+        document.getElementById('modalCancel').disabled = true;
+    } else {
+        document.getElementById('downloadPunctuationBtn').disabled = true;
+        document.getElementById('downloadPunctuationBtn').textContent = '⏳ Downloading...';
+    }
+
+    progressEl.classList.add('active');
+    fileEl.textContent = 'Starting download...';
+    fillEl.style.width = '0%';
+    pctEl.textContent = '0%';
+
+    // Simulate progress polling — the backend downloads with reqwest
+    // We poll scan_models to detect when files appear, but since
+    // the backend command is async and returns on completion,
+    // we show indeterminate progress until it finishes.
+    let progressInterval = setInterval(() => {
+        const current = parseFloat(fillEl.style.width) || 0;
+        if (current < 90) {
+            const inc = Math.random() * 3;
+            fillEl.style.width = Math.min(current + inc, 90) + '%';
+            pctEl.textContent = Math.round(fillEl.style.width.replace('%', '')) + '%';
+        }
+    }, 500);
+
+    fileEl.textContent = 'Downloading model.onnx + tokenizer.json...';
+
+    try {
+        await invoke('download_punctuation_model', { targetDir });
+        clearInterval(progressInterval);
+        fillEl.style.width = '100%';
+        pctEl.textContent = '100%';
+        fileEl.textContent = 'Download complete! Restart the service to apply.';
+        closeDownloadModal(true);
+        updatePunctuationStatus();
+        autoSaveConfig();
+    } catch (e) {
+        clearInterval(progressInterval);
+        progressEl.classList.remove('active');
+        fileEl.textContent = 'Download failed.';
+        console.error('Punctuation model download failed:', e);
+        if (isModal) {
+            document.getElementById('modalDownload').disabled = false;
+            document.getElementById('modalDownload').textContent = 'Retry Download';
+            document.getElementById('modalCancel').disabled = false;
+        } else {
+            document.getElementById('downloadPunctuationBtn').disabled = false;
+            document.getElementById('downloadPunctuationBtn').textContent = '⬇️ Retry Download';
+        }
+    }
+}
+
+function updatePunctuationStatus() {
+    const enabled = document.getElementById('punctuationEnabled').checked;
+    const statusEl = document.getElementById('punctuationModelStatus');
+    const dlBtn = document.getElementById('downloadPunctuationBtn');
+    if (!enabled) {
+        statusEl.textContent = '';
+        statusEl.className = 'model-status';
+        if (dlBtn) dlBtn.style.display = 'none';
+        return;
+    }
+    // Check model status
+    const config = buildConfigFromForm();
+    invoke('check_punctuation_model', { modelSearchDirs: config.model_search_dirs })
+        .then(status => {
+            if (status.found) {
+                if (isServiceRunning) {
+                    statusEl.textContent = '✓ Active — service running with punctuation';
+                    statusEl.className = 'model-status loaded';
+                } else {
+                    statusEl.textContent = '✓ Model found — restart service to apply';
+                    statusEl.className = 'model-status loaded';
+                }
+                if (dlBtn) dlBtn.style.display = 'none';
+            } else {
+                statusEl.textContent = '⚠ Model not found in search directories';
+                statusEl.className = 'model-status missing';
+                if (dlBtn) {
+                    dlBtn.style.display = 'inline-block';
+                    dlBtn.textContent = '⬇️ Download Punctuation Model';
+                    dlBtn.disabled = false;
+                }
+            }
+        })
+        .catch(() => {
+            statusEl.textContent = '…';
+            statusEl.className = 'model-status';
+        });
+}
 
 // Download model button
 document.getElementById('downloadModelBtn').addEventListener('click', async () => {

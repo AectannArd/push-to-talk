@@ -1,0 +1,7 @@
+{
+  "bundle": {
+    "resources": {
+      "ort-dylibs/macos/libonnxruntime.dylib": "./"
+    }
+  }
+}
