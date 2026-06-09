@@ -52,3 +52,4 @@ windows = { version = "0.56", features = [
 
 [build-dependencies]
 tauri-build = { version = "2", features = [] }
+ureq = "3"

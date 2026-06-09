@@ -730,14 +730,32 @@ fn main() {
         eprintln!("🚨 PANIC: {}", panic_info);
     }));
 
-    // Discover ONNX Runtime DLL for punctuation restoration.
-    // Tauri bundles it next to the exe; look there first, then check env var.
+    // Discover ONNX Runtime native library for punctuation restoration.
+    // Tauri bundles it as a resource; location varies by platform:
+    //   Windows: next to the .exe
+    //   macOS:   Contents/Resources/ (one level up from MacOS/ binary)
+    //   Linux:   next to the binary
     if std::env::var("ORT_DYLIB_PATH").is_err() {
         if let Ok(exe_path) = std::env::current_exe() {
             if let Some(exe_dir) = exe_path.parent() {
-                let dll_path = exe_dir.join("onnxruntime.dll");
-                if dll_path.exists() {
-                    std::env::set_var("ORT_DYLIB_PATH", dll_path);
+                // Platform-specific library name and location
+                #[cfg(target_os = "windows")]
+                let (lib_name, search_dir) = ("onnxruntime.dll", exe_dir.to_path_buf());
+
+                #[cfg(target_os = "macos")]
+                let (lib_name, search_dir) = {
+                    // Binary: Contents/MacOS/push-to-talk
+                    // Resources: Contents/Resources/libonnxruntime.dylib
+                    let res_dir = exe_dir.parent().map(|p| p.join("Resources"));
+                    ("libonnxruntime.dylib", res_dir.unwrap_or_else(|| exe_dir.to_path_buf()))
+                };
+
+                #[cfg(target_os = "linux")]
+                let (lib_name, search_dir) = ("libonnxruntime.so", exe_dir.to_path_buf());
+
+                let lib_path = search_dir.join(lib_name);
+                if lib_path.exists() {
+                    std::env::set_var("ORT_DYLIB_PATH", lib_path);
                     // Note: tracing is not initialized yet — the punctuator init
                     // will log success/failure once logging is up.
                 }
