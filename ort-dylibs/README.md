@@ -1,46 +1,60 @@
-Place ONNX Runtime native libraries here for Tauri bundling.
+# ONNX Runtime native libraries for push-to-talk
 
-Download the appropriate release for your target platform from:
-  https://github.com/microsoft/onnxruntime/releases
+This directory holds ONNX Runtime shared libraries (.dll / .dylib / .so)
+so Tauri can bundle them into the final application.
 
-## Platform-specific files needed:
+## How it works
 
-### Windows (x64)
-  ort-dylibs/windows/
-    onnxruntime.dll                  (~20 MB)
-    onnxruntime_providers_shared.dll (~1 MB)
+1. **build.rs** downloads the correct ONNX Runtime release for the target platform
+   from [Microsoft ONNX Runtime releases](https://github.com/microsoft/onnxruntime/releases)
+   and caches them here.
+2. **Tauri** copies the files into the app bundle via platform-specific configs
+   (`tauri.windows.conf.json`, `tauri.macos.conf.json`, `tauri.linux.conf.json`).
+3. **At runtime**, `main()` discovers the DLL next to the executable and sets
+   `ORT_DYLIB_PATH` before any ONNX code runs.
+4. **Graceful degradation**: if the DLL or model is missing, punctuation is
+   silently disabled and raw text is used after transcription.
 
-  Download: onnxruntime-win-x64-{version}.zip
-  Extract lib/onnxruntime.dll and lib/onnxruntime_providers_shared.dll
+## Platform files
 
-### macOS (Universal2 — x64 + ARM64)
-  ort-dylibs/macos/
-    libonnxruntime.dylib             (~40 MB universal)
+| Platform | Files |
+|----------|-------|
+| Windows  | `windows/onnxruntime.dll`, `windows/onnxruntime_providers_shared.dll` |
+| macOS    | `macos/libonnxruntime.dylib` |
+| Linux    | `linux/libonnxruntime.so` |
 
-  Download: onnxruntime-osx-universal2-{version}.tgz
-  Extract lib/libonnxruntime.{version}.dylib → rename to libonnxruntime.dylib
-  (or copy the symlink target)
+## Development (`cargo run`)
 
-### Linux (x64)
-  ort-dylibs/linux/
-    libonnxruntime.so                (~20 MB)
+When running via `cargo run`, the DLL must be next to the debug binary:
 
-  Download: onnxruntime-linux-x64-{version}.tgz
-  Extract lib/libonnxruntime.so.{version} → rename to libonnxruntime.so
-  (or copy the symlink target)
+```bash
+cp ort-dylibs/windows/onnxruntime.dll target/debug/
+cp ort-dylibs/windows/onnxruntime_providers_shared.dll target/debug/
+```
 
-## How it works:
+Or set the environment variable:
 
-1. Tauri bundles the platform-specific library via tauri.{platform}.conf.json
-2. At runtime, main() discovers the library next to the exe (or in Contents/Resources/ on macOS)
-3. ORT_DYLIB_PATH env var is set → ort crate loads it via dlopen/LoadLibrary
-4. If the DLL/dylib is missing or invalid, punctuation gracefully degrades (raw text used)
+```bash
+export ORT_DYLIB_PATH=/path/to/ort-dylibs/windows/onnxruntime.dll
+```
 
-## Development (cargo run):
+## Punctuation model
 
-Place the libraries in the appropriate subdirectory, then set ORT_DYLIB_PATH:
-  Windows: $env:ORT_DYLIB_PATH = "D:\path\to\ort-dylibs\windows\onnxruntime.dll"
-  macOS:   export ORT_DYLIB_PATH = "/path/to/ort-dylibs/macos/libonnxruntime.dylib"
-  Linux:   export ORT_DYLIB_PATH = "/path/to/ort-dylibs/linux/libonnxruntime.so"
+The ONNX model (`model.onnx` + `tokenizer.json`) is **not** stored here.
+It is published as a separate HuggingFace repository:
 
-Or rely on auto-discovery: copy the library next to target/debug/push-to-talk.exe
+```
+https://huggingface.co/Aectann/punctuation-case-model
+```
+
+Users download it via the Push-to-Talk UI (toggle punctuation, confirm download)
+or manually:
+
+```bash
+hf download Aectann/punctuation-case-model model.onnx tokenizer.json \
+  --local-dir ~/.push-to-talk/models/punctuator
+```
+
+The model is automatically discovered by scanning `<model_search_dir>/punctuator/model.onnx`.
+Original model: [kontur-ai/sbert_punc_case_ru](https://huggingface.co/kontur-ai/sbert_punc_case_ru)
+built on [ai-forever/sbert_large_nlu_ru](https://huggingface.co/ai-forever/sbert_large_nlu_ru).
