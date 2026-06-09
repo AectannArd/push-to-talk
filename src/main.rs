@@ -493,6 +493,114 @@ async fn download_model(model_id: String, target_dir: String) -> Result<String, 
     ))
 }
 
+// ── Punctuation model download ───────────────────────────────────
+
+const PUNCTUATION_MODEL_URL: &str =
+    "https://huggingface.co/Aectann/punctuation-case-model/resolve/main/model.onnx";
+const PUNCTUATION_TOKENIZER_URL: &str =
+    "https://huggingface.co/Aectann/punctuation-case-model/resolve/main/tokenizer.json";
+
+/// Result of checking whether the punctuation model is present.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PunctuationModelStatus {
+    pub found: bool,
+    pub model_path: Option<String>,
+    pub onnx_url: String,
+    pub tokenizer_url: String,
+}
+
+#[tauri::command]
+fn check_punctuation_model(model_search_dirs: Vec<String>) -> PunctuationModelStatus {
+    let model_path = punctuator::find_punctuation_model(&model_search_dirs);
+    PunctuationModelStatus {
+        found: model_path.is_some(),
+        model_path: model_path.map(|p| p.to_string_lossy().to_string()),
+        onnx_url: PUNCTUATION_MODEL_URL.to_string(),
+        tokenizer_url: PUNCTUATION_TOKENIZER_URL.to_string(),
+    }
+}
+
+#[tauri::command]
+async fn download_punctuation_model(target_dir: String) -> Result<String, String> {
+    use futures_util::StreamExt;
+    use reqwest::Client;
+    use tokio::io::AsyncWriteExt;
+
+    let target_dir = shellexpand::tilde(&target_dir).to_string();
+    let target_dir = Path::new(&target_dir).join("punctuator");
+
+    // Create target directory
+    tokio::fs::create_dir_all(&target_dir)
+        .await
+        .map_err(|e| format!("Failed to create directory: {}", e))?;
+
+    let files: &[(&str, &str, &str)] = &[
+        ("model.onnx", PUNCTUATION_MODEL_URL, "model.onnx.part"),
+        ("tokenizer.json", PUNCTUATION_TOKENIZER_URL, "tokenizer.json.part"),
+    ];
+
+    let client = Client::new();
+    let mut results = Vec::new();
+
+    for (name, url, part_ext) in files {
+        let target_path = target_dir.join(name);
+        let part_path = target_dir.join(part_ext);
+
+        tracing::info!("⬇️ Downloading {} ({})...", name, target_dir.display());
+
+        let response = client
+            .get(*url)
+            .send()
+            .await
+            .map_err(|e| format!("Failed to start download for {name}: {e}"))?;
+
+        if !response.status().is_success() {
+            return Err(format!("Download failed for {name}: HTTP {}", response.status()));
+        }
+
+        let total_size = response.content_length();
+
+        let mut file = tokio::fs::File::create(&part_path)
+            .await
+            .map_err(|e| format!("Failed to create file: {}", e))?;
+
+        let mut downloaded: u64 = 0;
+        let mut stream = response.bytes_stream();
+
+        while let Some(chunk) = stream.next().await {
+            let chunk = chunk.map_err(|e| format!("Download error: {}", e))?;
+            file.write_all(&chunk)
+                .await
+                .map_err(|e| format!("Write error: {}", e))?;
+
+            downloaded += chunk.len() as u64;
+            if let Some(total) = total_size {
+                let progress = (downloaded as f64 / total as f64 * 100.0) as u32;
+                tracing::info!("⬇️ Downloading {name}: {progress}%");
+            } else {
+                let mb = downloaded as f64 / (1024.0 * 1024.0);
+                tracing::info!("⬇️ Downloading {name}: {:.1} MB", mb);
+            }
+        }
+
+        // Atomically promote
+        std::fs::rename(&part_path, &target_path)
+            .map_err(|e| format!("Failed to finalize {name}: {}", e))?;
+
+        let size_mb = target_path
+            .metadata()
+            .map(|m| m.len() as f64 / (1024.0 * 1024.0))
+            .unwrap_or(0.0);
+        tracing::info!("✅ Downloaded {name} ({size_mb:.0} MB)");
+        results.push(format!("{name} ({size_mb:.0} MB)"));
+    }
+
+    Ok(format!(
+        "Punctuation model downloaded to {}",
+        target_dir.display()
+    ))
+}
+
 /// Receive log messages from frontend
 #[tauri::command]
 fn frontend_log(level: String, message: String) {
@@ -824,6 +932,8 @@ fn main() {
             scan_models,
             get_downloadable_models,
             download_model,
+            check_punctuation_model,
+            download_punctuation_model,
             frontend_log,
         ])
         .setup(move |app| {
