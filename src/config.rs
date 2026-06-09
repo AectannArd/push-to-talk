@@ -88,6 +88,19 @@ pub struct Config {
     /// Window visibility state: true = hidden in tray, false = show window.
     #[serde(default)]
     pub window_hidden: bool,
+
+    /// Enable punctuation & case restoration after transcription.
+    /// Requires an ONNX Runtime DLL and a punctuation model in `<model_dir>/punctuator/`.
+    #[serde(default)]
+    pub punctuation_enabled: bool,
+
+    /// Explicit path to `model.onnx` for punctuation. Auto-discovered if not set.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub punctuation_model_path: Option<String>,
+
+    /// Explicit path to `tokenizer.json` for punctuation. Auto-discovered next to model if not set.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub punctuation_tokenizer_path: Option<String>,
 }
 
 impl Default for Config {
@@ -104,6 +117,9 @@ impl Default for Config {
             log_retention_hours: default_retention_hours(),
             log_format: default_log_format(),
             window_hidden: false,
+            punctuation_enabled: false,
+            punctuation_model_path: None,
+            punctuation_tokenizer_path: None,
         }
     }
 }

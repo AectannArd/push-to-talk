@@ -152,3 +152,34 @@ input:focus, select:focus {
     display: flex; gap: 8px; align-items: flex-end;
 }
 .model-select { flex: 1; min-width: 0; }
+/* Toggle switch */
+.toggle-row {
+    display: flex; align-items: center; justify-content: space-between;
+    gap: 12px;
+}
+.toggle-label { margin: 0; }
+.toggle-switch {
+    position: relative; display: inline-block; width: 48px; height: 26px;
+    flex: 0 0 auto;
+}
+.toggle-switch input { opacity: 0; width: 0; height: 0; }
+.toggle-slider {
+    position: absolute; cursor: pointer;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background-color: #ccc; border-radius: 26px;
+    transition: 0.3s;
+}
+.toggle-slider:before {
+    position: absolute; content: "";
+    height: 20px; width: 20px; left: 3px; bottom: 3px;
+    background-color: white; border-radius: 50%;
+    transition: 0.3s;
+}
+input:checked + .toggle-slider { background-color: #667eea; }
+input:checked + .toggle-slider:before { transform: translateX(22px); }
+.model-status {
+    font-size: 12px; margin-top: 4px; padding: 4px 8px;
+    border-radius: 4px;
+}
+.model-status.loaded { color: #155724; background: #d4edda; }
+.model-status.missing { color: #856404; background: #fff3cd; }

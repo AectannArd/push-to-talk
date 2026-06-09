@@ -21,6 +21,11 @@ once_cell = "1"
 shellexpand = "3"
 futures-util = "0.3"
 
+# ONNX Runtime for punctuation restoration (load-dynamic avoids DLL lock race)
+ort = { version = "2.0.0-rc.12", features = ["load-dynamic", "api-18"], default-features = false }
+# HuggingFace tokenizer (WordPiece) for punctuation model
+tokenizers = { version = "0.21", features = ["onig"], default-features = false }
+
 # Tauri for GUI with global shortcuts
 tauri = { version = "2", features = ["tray-icon", "image-png", "tracing"] }
 tauri-plugin-shell = "2"

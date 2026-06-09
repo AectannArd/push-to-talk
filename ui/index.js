@@ -150,7 +150,8 @@ function buildConfigFromForm() {
         log_dir: document.getElementById('logDir').value.trim() || 'logs',
         log_level: document.getElementById('logLevel').value,
         log_format: document.getElementById('logFormat').value,
-        log_retention_hours: parseInt(document.getElementById('logRetention').value) ?? 24
+        log_retention_hours: parseInt(document.getElementById('logRetention').value) ?? 24,
+        punctuation_enabled: document.getElementById('punctuationEnabled').checked
     };
 }
 
@@ -176,7 +177,7 @@ function autoSaveConfig() {
 }
 
 // Auto-save on form field changes
-const autoSaveFields = ['hotkey', 'language', 'deviceSelect', 'modelSearchDirs', 'logDir', 'logLevel', 'logFormat', 'logRetention'];
+const autoSaveFields = ['hotkey', 'language', 'deviceSelect', 'modelSearchDirs', 'logDir', 'logLevel', 'logFormat', 'logRetention', 'punctuationEnabled'];
 autoSaveFields.forEach(id => {
     const el = document.getElementById(id);
     if (el) {
@@ -247,6 +248,9 @@ function updateStatusUI(status) {
     document.getElementById('serviceStatus').textContent = status.is_service_running ? 'Running' : 'Stopped';
     document.getElementById('recordingStatus').textContent = status.is_recording ? 'Yes' : 'No';
 
+    // Update punctuation status indicator
+    updatePunctuationStatus();
+
     // Update transcription ONLY after UI-initiated stop
     if (uiTranscriptionPending && status.last_transcription &&
         status.last_transcription !== lastDisplayedTranscription) {
@@ -286,6 +290,11 @@ function fillConfigForm(config) {
     document.getElementById('logLevel').value = config.log_level || 'info';
     document.getElementById('logFormat').value = config.log_format || 'text';
     document.getElementById('logRetention').value = config.log_retention_hours ?? 24;
+    // Punctuation
+    document.getElementById('punctuationEnabled').checked = config.punctuation_enabled || false;
+    document.getElementById('punctuationModelGroup').style.display =
+        config.punctuation_enabled ? 'block' : 'none';
+    updatePunctuationStatus();
 }
 
 function updateButtonAppearance() {
@@ -414,6 +423,30 @@ async function scanModels() {
 setInterval(() => {
     scanModels();
 }, 5000);
+
+// Punctuation toggle — show/hide status
+document.getElementById('punctuationEnabled').addEventListener('change', function() {
+    document.getElementById('punctuationModelGroup').style.display =
+        this.checked ? 'block' : 'none';
+    autoSaveConfig();
+});
+
+function updatePunctuationStatus() {
+    const enabled = document.getElementById('punctuationEnabled').checked;
+    const statusEl = document.getElementById('punctuationModelStatus');
+    if (!enabled) {
+        statusEl.textContent = '';
+        statusEl.className = 'model-status';
+        return;
+    }
+    if (isServiceRunning) {
+        statusEl.textContent = '✓ Active — service is running with punctuation';
+        statusEl.className = 'model-status loaded';
+    } else {
+        statusEl.textContent = '⚠ Enabled — restart the service to apply';
+        statusEl.className = 'model-status missing';
+    }
+}
 
 // Download model button
 document.getElementById('downloadModelBtn').addEventListener('click', async () => {
