@@ -135,11 +135,14 @@ src/
 ├── config.rs         TOML config at ~/.push-to-talk/config.toml
 ├── recorder.rs       Audio capture via cpal (i16 on Windows, f32 on macOS/Linux)
 ├── transcriber.rs    Whisper.cpp wrapper (whisper-cpp-plus), log bridge, greedy decoding
+├── punctuator.rs     ONNX Runtime BERT model for punctuation/case restoration
 └── voice_service.rs  Background orchestrator: recorder + transcriber + clipboard
-ui/
-├── index.html        Tauri WebView frontend
-├── index.js          Configuration UI, model scanning, polling
-└── index.css         Styling
+ui/                   React + TypeScript frontend (Vite + Bootstrap Morph dark theme)
+├── src/components/   UI components (StatusBar, ConfigForm, ModelSelector, etc.)
+├── src/hooks/        React hooks (useConfig, useStatus, useModels, useDevices)
+├── src/services/     Tauri IPC wrapper
+├── src/i18n/         49-language translations (EN, RU, DE, FR, ES, ...)
+└── public/           Static assets (favicon, download icon)
 ```
 
 ## Platform support

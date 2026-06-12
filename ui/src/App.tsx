@@ -50,6 +50,7 @@ export default function App() {
     useModels(ready, config.model_search_dirs, config.model);
   const { devices, selectedDeviceId, onDeviceChange } = useDevices(ready, config.device_id, updateConfig);
 
+  const [activeTab, setActiveTab] = useState('audio');
   const [statusMsg, setStatusMsg] = useState<{ text: string; type: string }>({ text: '', type: '' });
   const [keyboardTick, setKeyboardTick] = useState(0);
   const msgTimer = useRef<ReturnType<typeof setTimeout>>(null);
@@ -123,14 +124,16 @@ export default function App() {
         </div>
       )}
 
-      <StatusBar status={status} s={s} />
+      <StatusBar status={status} uiIsRecording={uiIsRecording} onToggle={handleToggle}
+        selectedModel={selectedModel} punctuationEnabled={config.punctuation_enabled}
+        onGoToModels={() => setActiveTab('models')} s={s} />
 
       <ConfigForm
         config={config} updateConfig={updateConfig}
         models={models} availableForDownload={availableForDownload}
         selectedModel={selectedModel} onSelectModel={selectModel} onDownloadModel={downloadModel}
         devices={devices} selectedDeviceId={selectedDeviceId} onDeviceChange={onDeviceChange}
-        status={status} uiIsRecording={uiIsRecording} onToggleRecording={handleToggle}
+        status={status} activeTab={activeTab} onTabChange={setActiveTab}
         s={s}
       />
     </div>

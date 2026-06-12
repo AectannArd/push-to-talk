@@ -1,4 +1,5 @@
 /* ── Morph dark overrides ────────────────────────── */
+.status-card { position: sticky; top: 8px; z-index: 1020; }
 .container { max-width: 750px; }
 .form-control, .form-select { color: #999 !important; }
 ::placeholder { color: var(--bs-body-color) !important; opacity: .55; }
