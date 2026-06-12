@@ -9,7 +9,7 @@ import { forwardLog } from './services/tauri';
 import ConfigForm from './components/ConfigForm';
 import StatusBar from './components/StatusBar';
 import LangSelect from './components/LangSelect';
-import 'bootstrap/dist/css/bootstrap.min.css';
+import './styles/grayscale.css';
 import './App.css';
 
 const LANG_OPTIONS: { code: string; label: string }[] = [
