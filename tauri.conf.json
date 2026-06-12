@@ -23,7 +23,8 @@
         "focus": true,
         "closable": true,
         "minimizable": true,
-        "maximizable": true
+        "maximizable": true,
+        "decorations": false
       }
     ],
     "security": {

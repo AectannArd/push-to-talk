@@ -5,7 +5,7 @@ import { useStatus } from './hooks/useStatus';
 import { useModels } from './hooks/useModels';
 import { useDevices } from './hooks/useDevices';
 import { useTranslation } from './i18n/useTranslation';
-import { forwardLog } from './services/tauri';
+import { invoke, forwardLog } from './services/tauri';
 import ConfigForm from './components/ConfigForm';
 import StatusBar from './components/StatusBar';
 import LangSelect from './components/LangSelect';
@@ -110,8 +110,12 @@ export default function App() {
 
   return (
     <div className="container py-3 position-relative">
-      <div className="position-absolute top-0 end-0 mt-3 me-3">
+      <div className="position-absolute top-0 end-0 mt-3 me-3 d-flex align-items-center gap-2">
         <LangSelect value={config.ui_language || 'en-US'} onChange={(code) => updateConfig('ui_language', code)} options={LANG_OPTIONS} />
+        <button type="button" className="btn-close" aria-label="Hide to tray"
+          onClick={() => { invoke('hide_window').catch(() => {}); }}
+          style={{ width: 10, height: 10, opacity: .5 }}
+        />
       </div>
 
       <h3 className="text-center mb-1">{s.appTitle}</h3>

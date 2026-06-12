@@ -277,6 +277,11 @@ fn trigger_recording() -> Result<(), String> {
 }
 
 #[tauri::command]
+fn hide_window(window: tauri::WebviewWindow) {
+    let _ = window.hide();
+}
+
+#[tauri::command]
 fn list_audio_devices() -> Result<Vec<DeviceDto>, String> {
     match crate::recorder::list_input_devices() {
         Ok(devices) => Ok(devices
@@ -927,6 +932,7 @@ fn main() {
             get_config,
             save_config,
             trigger_recording,
+            hide_window,
             list_audio_devices,
             get_current_device,
             scan_models,
