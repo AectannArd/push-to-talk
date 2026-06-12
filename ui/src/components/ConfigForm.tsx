@@ -9,7 +9,7 @@ interface Props {
   config: Config; updateConfig: (key: keyof Config, value: unknown) => void;
   models: Model[]; availableForDownload: DownloadableModel[];
   selectedModel: string | null; onSelectModel: (path: string) => void;
-  onDownloadModel: (modelId: string) => Promise<void>;
+  onDownloadModel: (modelId: string) => Promise<string | undefined>;
   devices: Device[]; selectedDeviceId: string; onDeviceChange: (id: string) => void;
   status: Status;
   activeTab: string; onTabChange: (tab: string) => void;

@@ -57,12 +57,21 @@ export function useModels(ready: boolean, modelSearchDirs: string[], selectedPat
   }, []);
 
   const downloadModel = useCallback(
-    async (modelId: string) => {
+    async (modelId: string): Promise<string | undefined> => {
       const base = (modelSearchDirs[0] || '').replace(/[\\/]+$/, '');
       const targetDir = base ? base + '/transcriber' : '';
       await invoke('download_model', { modelId, targetDir });
+      const entry = downloadable.find((m) => m.id === modelId);
+      if (!entry || !base) return undefined;
+      const sep = base.includes('\\') ? '\\' : '/';
+      const path = base.replace(/[\\/]+$/, '') + sep + 'transcriber' + sep + entry.name;
+      // Give the filesystem a moment, then auto-select
+      await new Promise((r) => setTimeout(r, 500));
+      setSelectedModel(path);
+      lastSnapshot.current = '';
+      return path;
     },
-    [modelSearchDirs],
+    [modelSearchDirs, downloadable],
   );
 
   return { models, downloadable, availableForDownload, selectedModel, selectModel, downloadModel };
