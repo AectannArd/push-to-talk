@@ -16,7 +16,7 @@ export default function StatusBar({ status, uiIsRecording, onToggle, s }: Props)
   const btnLabel = uiIsRecording ? s.stop : status.is_service_running ? s.startRecording : s.startService;
 
   return (
-    <div className="card mb-3">
+    <div className="card mb-3 status-card">
       <div className="card-body py-2">
         <div className="row g-2 align-items-center">
           {/* Left: status indicator + text + service/recording info */}

@@ -62,9 +62,7 @@ export default function PunctuationPanel({ config, updateConfig, status, s }: {
   const onModalCancel = () => { setShowModal(false); updateConfig('punctuation_enabled', false); };
 
   return (
-    <div className="card mb-3">
-      <div className="card-header py-2"><strong>{s.punctuationRestoration}</strong></div>
-      <div className="card-body">
+    <div>
         <div className="form-check form-switch mb-2">
           <input className="form-check-input" type="checkbox" id="punctuationEnabled"
             checked={config.punctuation_enabled} onChange={(e) => handleToggle(e.target.checked)} />
@@ -90,7 +88,6 @@ export default function PunctuationPanel({ config, updateConfig, status, s }: {
             )}
           </div>
         )}
-      </div>
       {showModal && <DownloadModal onConfirm={startDownload} onCancel={onModalCancel} downloading={downloading} downloadError={downloadError} s={s} />}
     </div>
   );
