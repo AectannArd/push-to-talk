@@ -50,7 +50,7 @@ export default function ModelSelector({ models, availableForDownload, selectedMo
             {availableForDownload.map((m) => <option key={m.id} value={m.id}>{m.desc}</option>)}
           </select>
           <button className="btn btn-primary" onClick={handleDownload} disabled={downloading || !downloadId}>
-            {downloading ? <><span className="spinner-border spinner-border-sm me-1" />{s.downloading}</> : s.download}
+            {downloading ? <><span className="spinner-border spinner-border-sm me-1" />{s.downloading}</> : <><img src="/download-icon-sm.png" alt="" width={18} height={18} style={{ marginRight: 4, verticalAlign: 'middle' }} />{s.download}</>}
           </button>
         </div>
         <div className="form-text">{s.downloadHint}</div>
