@@ -21,7 +21,7 @@
         "center": true,
         "visible": false,
         "focus": true,
-        "closable": false,
+        "closable": true,
         "minimizable": false,
         "maximizable": false
       }
