@@ -58,7 +58,8 @@ export function useModels(ready: boolean, modelSearchDirs: string[], selectedPat
 
   const downloadModel = useCallback(
     async (modelId: string) => {
-      const targetDir = modelSearchDirs[0] || '';
+      const base = (modelSearchDirs[0] || '').replace(/[\\/]+$/, '');
+      const targetDir = base ? base + '/transcriber' : '';
       await invoke('download_model', { modelId, targetDir });
     },
     [modelSearchDirs],
