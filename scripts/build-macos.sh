@@ -41,23 +41,23 @@ mkdir -p "$APP_BUNDLE/Contents/Frameworks"
 cp "$PROJECT_ROOT/target/release/$APP_NAME" "$APP_BUNDLE/Contents/MacOS/"
 chmod +x "$APP_BUNDLE/Contents/MacOS/$APP_NAME"
 
-# Convert logo to app icon (if logo.png exists)
-if [[ -f "$PROJECT_ROOT/logo.png" ]]; then
+# Convert logo to app icon (if icons/icon.png exists)
+if [[ -f "$PROJECT_ROOT/icons/icon.png" ]]; then
     echo "🎨 Converting logo to app icon..."
     ICONSET="$APP_BUNDLE/Contents/Resources/icon.iconset"
     mkdir -p "$ICONSET"
     
     # Generate all required icon sizes
-    sips -z 16 16 "$PROJECT_ROOT/logo.png" --out "$ICONSET/icon_16x16.png" >/dev/null 2>&1
-    sips -z 32 32 "$PROJECT_ROOT/logo.png" --out "$ICONSET/icon_16x16@2x.png" >/dev/null 2>&1
-    sips -z 32 32 "$PROJECT_ROOT/logo.png" --out "$ICONSET/icon_32x32.png" >/dev/null 2>&1
-    sips -z 64 64 "$PROJECT_ROOT/logo.png" --out "$ICONSET/icon_32x32@2x.png" >/dev/null 2>&1
-    sips -z 128 128 "$PROJECT_ROOT/logo.png" --out "$ICONSET/icon_128x128.png" >/dev/null 2>&1
-    sips -z 256 256 "$PROJECT_ROOT/logo.png" --out "$ICONSET/icon_128x128@2x.png" >/dev/null 2>&1
-    sips -z 256 256 "$PROJECT_ROOT/logo.png" --out "$ICONSET/icon_256x256.png" >/dev/null 2>&1
-    sips -z 512 512 "$PROJECT_ROOT/logo.png" --out "$ICONSET/icon_256x256@2x.png" >/dev/null 2>&1
-    sips -z 512 512 "$PROJECT_ROOT/logo.png" --out "$ICONSET/icon_512x512.png" >/dev/null 2>&1
-    sips -z 1024 1024 "$PROJECT_ROOT/logo.png" --out "$ICONSET/icon_512x512@2x.png" >/dev/null 2>&1
+    sips -z 16 16 "$PROJECT_ROOT/icons/icon.png" --out "$ICONSET/icon_16x16.png" >/dev/null 2>&1
+    sips -z 32 32 "$PROJECT_ROOT/icons/icon.png" --out "$ICONSET/icon_16x16@2x.png" >/dev/null 2>&1
+    sips -z 32 32 "$PROJECT_ROOT/icons/icon.png" --out "$ICONSET/icon_32x32.png" >/dev/null 2>&1
+    sips -z 64 64 "$PROJECT_ROOT/icons/icon.png" --out "$ICONSET/icon_32x32@2x.png" >/dev/null 2>&1
+    sips -z 128 128 "$PROJECT_ROOT/icons/icon.png" --out "$ICONSET/icon_128x128.png" >/dev/null 2>&1
+    sips -z 256 256 "$PROJECT_ROOT/icons/icon.png" --out "$ICONSET/icon_128x128@2x.png" >/dev/null 2>&1
+    sips -z 256 256 "$PROJECT_ROOT/icons/icon.png" --out "$ICONSET/icon_256x256.png" >/dev/null 2>&1
+    sips -z 512 512 "$PROJECT_ROOT/icons/icon.png" --out "$ICONSET/icon_256x256@2x.png" >/dev/null 2>&1
+    sips -z 512 512 "$PROJECT_ROOT/icons/icon.png" --out "$ICONSET/icon_512x512.png" >/dev/null 2>&1
+    sips -z 1024 1024 "$PROJECT_ROOT/icons/icon.png" --out "$ICONSET/icon_512x512@2x.png" >/dev/null 2>&1
     
     # Convert iconset to icns
     if command -v iconutil &> /dev/null; then
@@ -66,7 +66,7 @@ if [[ -f "$PROJECT_ROOT/logo.png" ]]; then
         echo "✓ App icon created: app.icns"
     else
         # Fallback: just copy the 512x512 version
-        sips -z 512 512 "$PROJECT_ROOT/logo.png" --out "$APP_BUNDLE/Contents/Resources/app.icns" >/dev/null 2>&1 || true
+        sips -z 512 512 "$PROJECT_ROOT/icons/icon.png" --out "$APP_BUNDLE/Contents/Resources/app.icns" >/dev/null 2>&1 || true
         rm -rf "$ICONSET"
     fi
 fi
