@@ -11,6 +11,7 @@ export interface Config {
   log_format: string;
   log_retention_hours: number;
   punctuation_enabled: boolean;
+  ui_language: string;
 }
 
 /** Matches Rust StatusDto (main.rs) */

@@ -1,9 +1,11 @@
 import type { Device } from '../types';
+import type { Strings } from '../i18n/translations';
 
 interface Props {
   devices: Device[];
   selectedDeviceId: string;
   onChange: (id: string) => void;
+  s: Strings;
 }
 
 function formatLabel(d: Device): string {
@@ -13,17 +15,17 @@ function formatLabel(d: Device): string {
   return label;
 }
 
-export default function DeviceSelector({ devices, selectedDeviceId, onChange }: Props) {
+export default function DeviceSelector({ devices, selectedDeviceId, onChange, s }: Props) {
   return (
     <div className="form-group">
-      <label htmlFor="deviceSelect">Audio Input Device</label>
+      <label htmlFor="deviceSelect">{s.audioDevice}</label>
       <select
         id="deviceSelect"
         name="deviceSelect"
         value={selectedDeviceId}
         onChange={(e) => onChange(e.target.value)}
       >
-        <option value="">Use default device</option>
+        <option value="">{s.useDefaultDevice}</option>
         {devices.map((d) => (
           <option key={d.id} value={d.id}>
             {formatLabel(d)}

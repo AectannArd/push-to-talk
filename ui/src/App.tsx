@@ -4,6 +4,7 @@ import { useConfig } from './hooks/useConfig';
 import { useStatus } from './hooks/useStatus';
 import { useModels } from './hooks/useModels';
 import { useDevices } from './hooks/useDevices';
+import { useTranslation } from './i18n/useTranslation';
 import { forwardLog } from './services/tauri';
 import ConfigForm from './components/ConfigForm';
 import StatusBar from './components/StatusBar';
@@ -12,6 +13,7 @@ import './App.css';
 export default function App() {
   const ready = useTauriReady();
   const { config, updateConfig, loaded } = useConfig(ready);
+  const s = useTranslation(config.ui_language);
   const { status, uiIsRecording, toggleRecording } = useStatus(ready);
   const { models, availableForDownload, selectedModel, selectModel, downloadModel } =
     useModels(ready, config.model_search_dirs, config.model);
@@ -25,7 +27,6 @@ export default function App() {
   const [keyboardTick, setKeyboardTick] = useState(0);
   const msgTimer = useRef<ReturnType<typeof setTimeout>>(null);
 
-  // Forward console logs to Rust backend
   useEffect(() => {
     if (!ready) return;
     const levels: Array<[keyof Console, string]> = [
@@ -47,7 +48,6 @@ export default function App() {
     });
   }, [ready]);
 
-  // Keyboard shortcut: Ctrl+R to toggle recording
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'r') {
@@ -61,7 +61,7 @@ export default function App() {
 
   useEffect(() => {
     if (keyboardTick > 0) {
-      toggleRecording().catch((e: Error) => showStatus('Failed: ' + e.message, 'error'));
+      toggleRecording().catch((e: Error) => showStatus(s.failed + e.message, 'error'));
     }
   }, [keyboardTick]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -75,31 +75,29 @@ export default function App() {
     try {
       await toggleRecording();
     } catch (e: unknown) {
-      showStatus('Failed: ' + ((e as Error)?.message || String(e)), 'error');
+      showStatus(s.failed + ((e as Error)?.message || String(e)), 'error');
     }
-  }, [toggleRecording, showStatus]);
-
-  // ── Render ──────────────────────────────────────────
+  }, [toggleRecording, showStatus, s.failed]);
 
   if (!ready || !loaded) {
     return (
       <div style={{ textAlign: 'center', padding: 40, color: '#fff' }}>
-        <p style={{ fontSize: 18, fontWeight: 600 }}>Push-to-Talk</p>
-        <p style={{ marginTop: 8, opacity: 0.8 }}>Initializing…</p>
+        <p style={{ fontSize: 18, fontWeight: 600 }}>{s.appTitle}</p>
+        <p style={{ marginTop: 8, opacity: 0.8 }}>{s.initializing}</p>
       </div>
     );
   }
 
   return (
     <div className="container">
-      <h1>Push-to-Talk</h1>
-      <p className="subtitle">Voice transcription at your fingertips</p>
+      <h1>{s.appTitle}</h1>
+      <p className="subtitle">{s.appSubtitle}</p>
 
       {statusMsg.text && (
         <div className={`status-message status-${statusMsg.type}`}>{statusMsg.text}</div>
       )}
 
-      <StatusBar status={status} />
+      <StatusBar status={status} s={s} />
 
       <ConfigForm
         config={config}
@@ -115,6 +113,7 @@ export default function App() {
         status={status}
         uiIsRecording={uiIsRecording}
         onToggleRecording={handleToggle}
+        s={s}
       />
     </div>
   );

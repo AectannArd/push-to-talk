@@ -1,5 +1,7 @@
 import { useState } from 'react';
 import type { Model, DownloadableModel } from '../types';
+import type { Strings } from '../i18n/translations';
+import { fmt } from '../i18n/useTranslation';
 
 interface Props {
   models: Model[];
@@ -7,6 +9,7 @@ interface Props {
   selectedModel: string | null;
   onSelectModel: (path: string) => void;
   onDownload: (modelId: string) => Promise<void>;
+  s: Strings;
 }
 
 export default function ModelSelector({
@@ -15,6 +18,7 @@ export default function ModelSelector({
   selectedModel,
   onSelectModel,
   onDownload,
+  s,
 }: Props) {
   const [downloadId, setDownloadId] = useState('');
   const [downloading, setDownloading] = useState(false);
@@ -28,10 +32,10 @@ export default function ModelSelector({
     setError('');
     try {
       await onDownload(downloadId);
-      setSuccess(`Model ${downloadId} downloaded successfully!`);
+      setSuccess(fmt(s.downloadSuccess, downloadId));
       setDownloadId('');
     } catch (e: unknown) {
-      setError('Download failed: ' + ((e as Error)?.message || String(e)));
+      setError(s.downloadFailed + ((e as Error)?.message || String(e)));
     } finally {
       setDownloading(false);
     }
@@ -40,10 +44,10 @@ export default function ModelSelector({
   return (
     <>
       <div className="form-group">
-        <label>Available Models</label>
+        <label>{s.availableModels}</label>
         <div className="model-list">
           {models.length === 0 && (
-            <p style={{ color: '#888' }}>Scanning model directories...</p>
+            <p style={{ color: '#888' }}>{s.scanningModels}</p>
           )}
           {models.map((m) => (
             <div
@@ -63,14 +67,14 @@ export default function ModelSelector({
       </div>
 
       <div className="form-group">
-        <label>Download Model</label>
+        <label>{s.downloadModelLabel}</label>
         <div className="model-download-row">
           <select
             className="model-select"
             value={downloadId}
             onChange={(e) => setDownloadId(e.target.value)}
           >
-            <option value="">Select a model to download...</option>
+            <option value="">{s.selectModelToDownload}</option>
             {availableForDownload.map((m) => (
               <option key={m.id} value={m.id}>
                 {m.desc}
@@ -83,12 +87,10 @@ export default function ModelSelector({
             onClick={handleDownload}
             disabled={downloading || !downloadId}
           >
-            {downloading ? '⏳ Downloading...' : '⬇ Download'}
+            {downloading ? s.downloading : s.download}
           </button>
         </div>
-        <div className="hint">
-          Downloads from Hugging Face to the first directory in Model Search Directories
-        </div>
+        <div className="hint">{s.downloadHint}</div>
         {success && <p style={{ color: 'green' }}>{success}</p>}
         {error && <p style={{ color: 'red' }}>{error}</p>}
       </div>

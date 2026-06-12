@@ -101,6 +101,14 @@ pub struct Config {
     /// Explicit path to `tokenizer.json` for punctuation. Auto-discovered next to model if not set.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub punctuation_tokenizer_path: Option<String>,
+
+    /// UI language: "en" or "ru". Controls frontend text labels.
+    #[serde(default = "default_ui_language")]
+    pub ui_language: String,
+}
+
+fn default_ui_language() -> String {
+    "en".into()
 }
 
 impl Default for Config {
@@ -120,6 +128,7 @@ impl Default for Config {
             punctuation_enabled: false,
             punctuation_model_path: None,
             punctuation_tokenizer_path: None,
+            ui_language: default_ui_language(),
         }
     }
 }

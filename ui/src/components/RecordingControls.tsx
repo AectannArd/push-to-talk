@@ -1,12 +1,14 @@
 import type { Status } from '../types';
+import type { Strings } from '../i18n/translations';
 
 interface Props {
   status: Status;
   uiIsRecording: boolean;
   onToggle: () => void;
+  s: Strings;
 }
 
-export default function RecordingControls({ status, uiIsRecording, onToggle }: Props) {
+export default function RecordingControls({ status, uiIsRecording, onToggle, s }: Props) {
   const btnClass = uiIsRecording
     ? 'btn-danger'
     : status.is_service_running
@@ -14,10 +16,10 @@ export default function RecordingControls({ status, uiIsRecording, onToggle }: P
       : 'btn-secondary';
 
   const btnText = uiIsRecording
-    ? '⏹ Stop'
+    ? s.stop
     : status.is_service_running
-      ? '🎤 Start Recording'
-      : '▶ Start Service';
+      ? s.startRecording
+      : s.startService;
 
   return (
     <>

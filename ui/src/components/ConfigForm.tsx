@@ -4,6 +4,7 @@ import RecordingControls from './RecordingControls';
 import PunctuationPanel from './PunctuationPanel';
 import LoggingPanel from './LoggingPanel';
 import type { Config, Status, Model, DownloadableModel, Device } from '../types';
+import type { Strings } from '../i18n/translations';
 
 interface Props {
   config: Config;
@@ -19,6 +20,7 @@ interface Props {
   status: Status;
   uiIsRecording: boolean;
   onToggleRecording: () => void;
+  s: Strings;
 }
 
 export default function ConfigForm({
@@ -35,11 +37,12 @@ export default function ConfigForm({
   status,
   uiIsRecording,
   onToggleRecording,
+  s,
 }: Props) {
   const searchDirsStr = (config.model_search_dirs || []).join(', ');
 
   const handleSearchDirsChange = (value: string) => {
-    const dirs = value.split(',').map((s) => s.trim()).filter(Boolean);
+    const dirs = value.split(',').map((d) => d.trim()).filter(Boolean);
     updateConfig('model_search_dirs', dirs);
   };
 
@@ -50,10 +53,23 @@ export default function ConfigForm({
 
   return (
     <div className="config-section">
-      <h2 className="config-title">Configuration</h2>
+      <h2 className="config-title">{s.configuration}</h2>
       <form onSubmit={(e) => e.preventDefault()}>
+        {/* ── UI Language ────────────────────────────── */}
+        <div className="form-group" style={{ maxWidth: 280 }}>
+          <label htmlFor="uiLanguage">UI Language / Язык интерфейса</label>
+          <select
+            id="uiLanguage"
+            value={config.ui_language || 'en'}
+            onChange={(e) => updateConfig('ui_language', e.target.value)}
+          >
+            <option value="en">English</option>
+            <option value="ru">Русский</option>
+          </select>
+        </div>
+
         {/* ── Common ─────────────────────────────────── */}
-        <div className="section-title">Common</div>
+        <div className="section-title">{s.common}</div>
         <div className="common-grid">
           <div className="common-left">
             <ModelSelector
@@ -62,11 +78,13 @@ export default function ConfigForm({
               selectedModel={selectedModel}
               onSelectModel={handleSelectModel}
               onDownload={onDownloadModel}
+              s={s}
             />
             <DeviceSelector
               devices={devices}
               selectedDeviceId={selectedDeviceId}
               onChange={onDeviceChange}
+              s={s}
             />
           </div>
           <div className="common-right">
@@ -74,14 +92,15 @@ export default function ConfigForm({
               status={status}
               uiIsRecording={uiIsRecording}
               onToggle={onToggleRecording}
+              s={s}
             />
           </div>
         </div>
 
         {/* ── Audio & Transcription ──────────────────── */}
-        <div className="section-title">Audio &amp; Transcription</div>
+        <div className="section-title">{s.audioTranscription}</div>
         <div className="form-group">
-          <label htmlFor="hotkey">Hotkey</label>
+          <label htmlFor="hotkey">{s.hotkey}</label>
           <input
             type="text"
             id="hotkey"
@@ -89,10 +108,10 @@ export default function ConfigForm({
             onChange={(e) => updateConfig('hotkey', e.target.value)}
             placeholder="Ctrl+Shift+T"
           />
-          <div className="hint">Format: Mod+Mod+Key (e.g., Ctrl+Shift+T, Alt+T)</div>
+          <div className="hint">{s.hotkeyHint}</div>
         </div>
         <div className="form-group">
-          <label htmlFor="language">Language</label>
+          <label htmlFor="language">{s.language}</label>
           <input
             type="text"
             id="language"
@@ -100,13 +119,13 @@ export default function ConfigForm({
             onChange={(e) => updateConfig('language', e.target.value)}
             placeholder="auto"
           />
-          <div className="hint">Use &quot;auto&quot; for automatic detection, or specify: ru, en, de, etc.</div>
+          <div className="hint">{s.languageHint}</div>
         </div>
 
         {/* ── Whisper Model ──────────────────────────── */}
-        <div className="section-title">Whisper Model</div>
+        <div className="section-title">{s.whisperModel}</div>
         <div className="form-group">
-          <label htmlFor="modelSearchDirs">Model Search Directories</label>
+          <label htmlFor="modelSearchDirs">{s.modelSearchDirs}</label>
           <input
             type="text"
             id="modelSearchDirs"
@@ -114,14 +133,14 @@ export default function ConfigForm({
             onChange={(e) => handleSearchDirsChange(e.target.value)}
             placeholder="~/.push-to-talk/models"
           />
-          <div className="hint">Comma-separated list of directories</div>
+          <div className="hint">{s.modelSearchDirsHint}</div>
         </div>
 
         {/* ── Punctuation ────────────────────────────── */}
-        <PunctuationPanel config={config} updateConfig={updateConfig} status={status} />
+        <PunctuationPanel config={config} updateConfig={updateConfig} status={status} s={s} />
 
         {/* ── Logging ────────────────────────────────── */}
-        <LoggingPanel config={config} updateConfig={updateConfig} />
+        <LoggingPanel config={config} updateConfig={updateConfig} s={s} />
       </form>
     </div>
   );
