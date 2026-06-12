@@ -1,6 +1,5 @@
 import ModelSelector from './ModelSelector';
 import DeviceSelector from './DeviceSelector';
-import RecordingControls from './RecordingControls';
 import PunctuationPanel from './PunctuationPanel';
 import LoggingPanel from './LoggingPanel';
 import type { Config, Status, Model, DownloadableModel, Device } from '../types';
@@ -12,7 +11,7 @@ interface Props {
   selectedModel: string | null; onSelectModel: (path: string) => void;
   onDownloadModel: (modelId: string) => Promise<void>;
   devices: Device[]; selectedDeviceId: string; onDeviceChange: (id: string) => void;
-  status: Status; uiIsRecording: boolean; onToggleRecording: () => void;
+  status: Status;
   s: Strings;
 }
 
@@ -27,18 +26,12 @@ export default function ConfigForm(props: Props) {
         <form onSubmit={(e) => e.preventDefault()}>
           {/* Common section */}
           <h6 className="text-primary mb-3">{s.common}</h6>
-          <div className="row g-3 mb-3">
-            <div className="col-md-7">
-              <ModelSelector models={props.models} availableForDownload={props.availableForDownload}
-                selectedModel={props.selectedModel} onSelectModel={props.onSelectModel}
-                onDownload={props.onDownloadModel} s={s} />
-              <DeviceSelector devices={props.devices} selectedDeviceId={props.selectedDeviceId}
-                onChange={props.onDeviceChange} s={s} />
-            </div>
-            <div className="col-md-5">
-              <RecordingControls status={props.status} uiIsRecording={props.uiIsRecording}
-                onToggle={props.onToggleRecording} s={s} />
-            </div>
+          <div className="mb-3">
+            <ModelSelector models={props.models} availableForDownload={props.availableForDownload}
+              selectedModel={props.selectedModel} onSelectModel={props.onSelectModel}
+              onDownload={props.onDownloadModel} s={s} />
+            <DeviceSelector devices={props.devices} selectedDeviceId={props.selectedDeviceId}
+              onChange={props.onDeviceChange} s={s} />
           </div>
 
           {/* Audio & Transcription */}

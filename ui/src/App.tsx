@@ -123,14 +123,14 @@ export default function App() {
         </div>
       )}
 
-      <StatusBar status={status} s={s} />
+      <StatusBar status={status} uiIsRecording={uiIsRecording} onToggle={handleToggle} s={s} />
 
       <ConfigForm
         config={config} updateConfig={updateConfig}
         models={models} availableForDownload={availableForDownload}
         selectedModel={selectedModel} onSelectModel={selectModel} onDownloadModel={downloadModel}
         devices={devices} selectedDeviceId={selectedDeviceId} onDeviceChange={onDeviceChange}
-        status={status} uiIsRecording={uiIsRecording} onToggleRecording={handleToggle}
+        status={status}
         s={s}
       />
     </div>
