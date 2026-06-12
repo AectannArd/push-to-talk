@@ -19,6 +19,7 @@ export interface Strings {
   appTitle: string; appSubtitle: string; initializing: string;
   recording: string; ready: string; serviceStopped: string;
   serviceLabel: string; recordingLabel: string; running: string; stopped: string;
+  modelLabel: string; punctuationLabel: string; enabled: string; disabled: string; none: string;
   yes: string; no: string;
   startRecording: string; stop: string; startService: string;
   audioDevice: string; useDefaultDevice: string;
@@ -49,6 +50,8 @@ const en: T = {
   initializing: 'Initializing…',
   recording: 'Recording...', ready: 'Ready (press button or hotkey to record)',
   serviceStopped: 'Service stopped', serviceLabel: 'Service:', recordingLabel: 'Recording:',
+  modelLabel: 'Model:', punctuationLabel: 'Punctuation:',
+  enabled: 'on', disabled: 'off', none: 'none',
   running: 'Running', stopped: 'Stopped', yes: 'Yes', no: 'No',
   startRecording: '\u{1F3A4} Start Recording', stop: '\u{23F9} Stop', startService: '\u{25B6} Start Service',
   audioDevice: 'Audio Input Device', useDefaultDevice: 'Use default device',
@@ -92,7 +95,7 @@ const ru: T = {
   recording: 'Запись...',
   ready: 'Готово (нажмите кнопку или горячую клавишу)',
   serviceStopped: 'Сервис остановлен',
-  serviceLabel: 'Сервис:', recordingLabel: 'Запись:',
+  serviceLabel: 'Сервис:', recordingLabel: 'Запись:', modelLabel: 'Модель:', punctuationLabel: 'Пунктуация:', enabled: 'вкл', disabled: 'выкл', none: 'нет',
   running: 'Запущен', stopped: 'Остановлен',
   yes: 'Да', no: 'Нет',
   startRecording: '\u{1F3A4} Начать запись',

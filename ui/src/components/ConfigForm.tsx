@@ -1,4 +1,3 @@
-import { useState } from 'react';
 import ModelSelector from './ModelSelector';
 import DeviceSelector from './DeviceSelector';
 import PunctuationPanel from './PunctuationPanel';
@@ -13,6 +12,7 @@ interface Props {
   onDownloadModel: (modelId: string) => Promise<void>;
   devices: Device[]; selectedDeviceId: string; onDeviceChange: (id: string) => void;
   status: Status;
+  activeTab: string; onTabChange: (tab: string) => void;
   s: Strings;
 }
 
@@ -26,7 +26,8 @@ const TAB_ITEMS: { key: Tab; label: (s: Strings) => string }[] = [
 
 export default function ConfigForm(props: Props) {
   const { config, updateConfig, s } = props;
-  const [active, setActive] = useState<Tab>('audio');
+  const active = props.activeTab as Tab;
+  const setActive = (t: string) => props.onTabChange(t);
   const searchDirsStr = (config.model_search_dirs || []).join(', ');
 
   const handleSearchDirsChange = (value: string) => {

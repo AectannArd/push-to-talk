@@ -5,21 +5,27 @@ interface Props {
   status: Status;
   uiIsRecording: boolean;
   onToggle: () => void;
+  selectedModel: string | null;
+  punctuationEnabled: boolean;
+  onGoToModels: () => void;
   s: Strings;
 }
 
-export default function StatusBar({ status, uiIsRecording, onToggle, s }: Props) {
+export default function StatusBar({ status, uiIsRecording, onToggle, selectedModel, punctuationEnabled, onGoToModels, s }: Props) {
   const dotBg = status.is_recording ? 'var(--bs-danger)' : status.is_service_running ? 'var(--bs-success)' : 'var(--bs-secondary)';
   const text = status.is_recording ? s.recording : status.is_service_running ? s.ready : s.serviceStopped;
 
   const btnVariant = uiIsRecording ? 'danger' : status.is_service_running ? 'primary' : 'secondary';
   const btnLabel = uiIsRecording ? s.stop : status.is_service_running ? s.startRecording : s.startService;
 
+  const activeModel = selectedModel
+    ? selectedModel.split('\\').pop()?.split('/').pop() || selectedModel
+    : null;
+
   return (
     <div className="card mb-3 status-card">
       <div className="card-body py-2">
         <div className="row g-2 align-items-center">
-          {/* Left: status indicator + text + service/recording info */}
           <div className="col-md-7">
             <div className="d-flex align-items-center gap-2 mb-2">
               <span style={{ width: 12, height: 12, borderRadius: '50%', display: 'inline-block', backgroundColor: dotBg, flexShrink: 0 }} />
@@ -38,9 +44,24 @@ export default function StatusBar({ status, uiIsRecording, onToggle, s }: Props)
                   <span className="float-end fw-semibold small">{status.is_recording ? s.yes : s.no}</span>
                 </div>
               </div>
+              <div className="col-6">
+                <div className={`bg-body-tertiary rounded p-2${activeModel ? '' : ' border border-danger border-opacity-25'}`} style={activeModel ? {} : { boxShadow: '0 0 8px rgba(220,53,69,.25)' }}>
+                  <span className="text-muted small">{s.modelLabel}</span>
+                  {activeModel ? (
+                    <span className="float-end fw-semibold small text-truncate" style={{ maxWidth: '60%' }} title={selectedModel || ''}>{activeModel}</span>
+                  ) : (
+                    <span className="float-end small" style={{ cursor: 'pointer', textDecoration: 'underline' }} onClick={onGoToModels}>download…</span>
+                  )}
+                </div>
+              </div>
+              <div className="col-6">
+                <div className="bg-body-tertiary rounded p-2">
+                  <span className="text-muted small">{s.punctuationLabel}</span>
+                  <span className="float-end fw-semibold small">{punctuationEnabled ? s.enabled : s.disabled}</span>
+                </div>
+              </div>
             </div>
           </div>
-          {/* Right: button + transcription */}
           <div className="col-md-5">
             <div className="d-flex flex-column gap-2">
               <button className={`btn btn-${btnVariant} btn-sm w-100`} onClick={onToggle}>{btnLabel}</button>

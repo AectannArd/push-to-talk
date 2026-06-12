@@ -21,10 +21,9 @@
         "center": true,
         "visible": false,
         "focus": true,
-        "closable": true,
-        "minimizable": true,
-        "maximizable": true,
-        "decorations": false
+        "closable": false,
+        "minimizable": false,
+        "maximizable": false
       }
     ],
     "security": {
