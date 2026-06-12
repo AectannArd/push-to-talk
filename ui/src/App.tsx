@@ -9,60 +9,35 @@ import { forwardLog } from './services/tauri';
 import ConfigForm from './components/ConfigForm';
 import StatusBar from './components/StatusBar';
 import LangSelect from './components/LangSelect';
+import 'bootstrap/dist/css/bootstrap.min.css';
 import './App.css';
 
 const LANG_OPTIONS: { code: string; label: string }[] = [
-  { code: 'en-US', label: 'EN' },
-  { code: 'ru-RU', label: 'RU' },
-  { code: 'de-DE', label: 'DE' },
-  { code: 'fr-FR', label: 'FR' },
-  { code: 'es-ES', label: 'ES' },
-  { code: 'it-IT', label: 'IT' },
-  { code: 'pt-PT', label: 'PT' },
-  { code: 'pl-PL', label: 'PL' },
-  { code: 'uk-UA', label: 'UA' },
-  { code: 'nl-NL', label: 'NL' },
-  { code: 'cs-CZ', label: 'CZ' },
-  { code: 'sv-SE', label: 'SE' },
-  { code: 'fi-FI', label: 'FI' },
-  { code: 'ro-RO', label: 'RO' },
-  { code: 'hu-HU', label: 'HU' },
-  { code: 'el-GR', label: 'EL' },
-  { code: 'bg-BG', label: 'BG' },
-  { code: 'da-DK', label: 'DA' },
-  { code: 'sk-SK', label: 'SK' },
-  { code: 'lt-LT', label: 'LT' },
-  { code: 'lv-LV', label: 'LV' },
-  { code: 'et-EE', label: 'EE' },
-  { code: 'sl-SI', label: 'SI' },
-  { code: 'hr-HR', label: 'HR' },
-  { code: 'no-NO', label: 'NO' },
-  { code: 'tr-TR', label: 'TR' },
+  { code: 'en-US', label: 'EN' }, { code: 'ru-RU', label: 'RU' },
+  { code: 'de-DE', label: 'DE' }, { code: 'fr-FR', label: 'FR' },
+  { code: 'es-ES', label: 'ES' }, { code: 'it-IT', label: 'IT' },
+  { code: 'pt-PT', label: 'PT' }, { code: 'pl-PL', label: 'PL' },
+  { code: 'uk-UA', label: 'UA' }, { code: 'nl-NL', label: 'NL' },
+  { code: 'cs-CZ', label: 'CZ' }, { code: 'sv-SE', label: 'SE' },
+  { code: 'fi-FI', label: 'FI' }, { code: 'ro-RO', label: 'RO' },
+  { code: 'hu-HU', label: 'HU' }, { code: 'el-GR', label: 'EL' },
+  { code: 'bg-BG', label: 'BG' }, { code: 'da-DK', label: 'DA' },
+  { code: 'sk-SK', label: 'SK' }, { code: 'lt-LT', label: 'LT' },
+  { code: 'lv-LV', label: 'LV' }, { code: 'et-EE', label: 'EE' },
+  { code: 'sl-SI', label: 'SI' }, { code: 'hr-HR', label: 'HR' },
+  { code: 'no-NO', label: 'NO' }, { code: 'tr-TR', label: 'TR' },
   { code: 'be-BY', label: 'BE' },
-  // Asia
-  { code: 'zh-CN', label: 'ZH' },
-  { code: 'ja-JP', label: 'JA' },
-  { code: 'ko-KR', label: 'KO' },
-  { code: 'hi-IN', label: 'HI' },
-  { code: 'ar-SA', label: 'AR' },
-  { code: 'th-TH', label: 'TH' },
-  { code: 'vi-VN', label: 'VI' },
-  { code: 'id-ID', label: 'ID' },
-  { code: 'ms-MY', label: 'MS' },
-  { code: 'fa-IR', label: 'FA' },
-  { code: 'he-IL', label: 'HE' },
-  { code: 'bn-BD', label: 'BN' },
-  { code: 'ur-PK', label: 'UR' },
-  { code: 'ta-IN', label: 'TA' },
+  { code: 'zh-CN', label: 'ZH' }, { code: 'ja-JP', label: 'JA' },
+  { code: 'ko-KR', label: 'KO' }, { code: 'hi-IN', label: 'HI' },
+  { code: 'ar-SA', label: 'AR' }, { code: 'th-TH', label: 'TH' },
+  { code: 'vi-VN', label: 'VI' }, { code: 'id-ID', label: 'ID' },
+  { code: 'ms-MY', label: 'MS' }, { code: 'fa-IR', label: 'FA' },
+  { code: 'he-IL', label: 'HE' }, { code: 'bn-BD', label: 'BN' },
+  { code: 'ur-PK', label: 'UR' }, { code: 'ta-IN', label: 'TA' },
   { code: 'te-IN', label: 'TE' },
-  // Africa
-  { code: 'sw-KE', label: 'SW' },
-  { code: 'am-ET', label: 'AM' },
-  { code: 'zu-ZA', label: 'ZU' },
-  { code: 'af-ZA', label: 'AF' },
-  { code: 'ha-NG', label: 'HA' },
-  { code: 'yo-NG', label: 'YO' },
-  // Americas
+  { code: 'sw-KE', label: 'SW' }, { code: 'am-ET', label: 'AM' },
+  { code: 'zu-ZA', label: 'ZU' }, { code: 'af-ZA', label: 'AF' },
+  { code: 'ha-NG', label: 'HA' }, { code: 'yo-NG', label: 'YO' },
   { code: 'pt-BR', label: 'BR' },
 ];
 
@@ -73,33 +48,22 @@ export default function App() {
   const { status, uiIsRecording, toggleRecording } = useStatus(ready);
   const { models, availableForDownload, selectedModel, selectModel, downloadModel } =
     useModels(ready, config.model_search_dirs, config.model);
-  const { devices, selectedDeviceId, onDeviceChange } = useDevices(
-    ready,
-    config.device_id,
-    updateConfig,
-  );
+  const { devices, selectedDeviceId, onDeviceChange } = useDevices(ready, config.device_id, updateConfig);
 
-  const [statusMsg, setStatusMsg] = useState({ text: '', type: '' });
+  const [statusMsg, setStatusMsg] = useState<{ text: string; type: string }>({ text: '', type: '' });
   const [keyboardTick, setKeyboardTick] = useState(0);
   const msgTimer = useRef<ReturnType<typeof setTimeout>>(null);
 
   useEffect(() => {
     if (!ready) return;
     const levels: Array<[keyof Console, string]> = [
-      ['log', 'trace'],
-      ['debug', 'debug'],
-      ['info', 'info'],
-      ['warn', 'warn'],
-      ['error', 'error'],
+      ['log', 'trace'], ['debug', 'debug'], ['info', 'info'], ['warn', 'warn'], ['error', 'error'],
     ];
     levels.forEach(([fn, level]) => {
       const orig = console[fn] as (...a: unknown[]) => void;
       (console[fn] as unknown) = (...args: unknown[]) => {
         orig(...args);
-        forwardLog(
-          level,
-          args.map((a) => (typeof a === 'object' ? JSON.stringify(a) : String(a))).join(' '),
-        );
+        forwardLog(level, args.map((a) => (typeof a === 'object' ? JSON.stringify(a) : String(a))).join(' '));
       };
     });
   }, [ready]);
@@ -116,9 +80,7 @@ export default function App() {
   }, [status.is_service_running]);
 
   useEffect(() => {
-    if (keyboardTick > 0) {
-      toggleRecording().catch((e: Error) => showStatus(s.failed + e.message, 'error'));
-    }
+    if (keyboardTick > 0) toggleRecording().catch((e: Error) => showStatus(s.failed + e.message, 'danger'));
   }, [keyboardTick]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const showStatus = useCallback((text: string, type: string) => {
@@ -128,54 +90,47 @@ export default function App() {
   }, []);
 
   const handleToggle = useCallback(async () => {
-    try {
-      await toggleRecording();
-    } catch (e: unknown) {
-      showStatus(s.failed + ((e as Error)?.message || String(e)), 'error');
-    }
+    try { await toggleRecording(); }
+    catch (e: unknown) { showStatus(s.failed + ((e as Error)?.message || String(e)), 'danger'); }
   }, [toggleRecording, showStatus, s.failed]);
 
   if (!ready || !loaded) {
     return (
-      <div style={{ textAlign: 'center', padding: 40, color: '#fff' }}>
-        <p style={{ fontSize: 18, fontWeight: 600 }}>{s.appTitle}</p>
-        <p style={{ marginTop: 8, opacity: 0.8 }}>{s.initializing}</p>
+      <div className="d-flex justify-content-center align-items-center" style={{ minHeight: '100vh' }}>
+        <div className="text-white text-center">
+          <h4>{s.appTitle}</h4>
+          <div className="spinner-border text-light mt-2" role="status">
+            <span className="visually-hidden">{s.initializing}</span>
+          </div>
+          <p className="mt-2 opacity-75">{s.initializing}</p>
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="container">
-      <div className="lang-switcher">
-        <LangSelect
-          value={config.ui_language || 'en-US'}
-          onChange={(code) => updateConfig('ui_language', code)}
-          options={LANG_OPTIONS}
-        />
+    <div className="container py-3 position-relative">
+      <div className="position-absolute top-0 end-0 mt-3 me-3">
+        <LangSelect value={config.ui_language || 'en-US'} onChange={(code) => updateConfig('ui_language', code)} options={LANG_OPTIONS} />
       </div>
-      <h1>{s.appTitle}</h1>
-      <p className="subtitle">{s.appSubtitle}</p>
+
+      <h3 className="text-center mb-1">{s.appTitle}</h3>
+      <p className="text-center text-muted small mb-3">{s.appSubtitle}</p>
 
       {statusMsg.text && (
-        <div className={`status-message status-${statusMsg.type}`}>{statusMsg.text}</div>
+        <div className={`alert alert-${statusMsg.type} alert-dismissible py-2 text-center`}>
+          {statusMsg.text}
+        </div>
       )}
 
       <StatusBar status={status} s={s} />
 
       <ConfigForm
-        config={config}
-        updateConfig={updateConfig}
-        models={models}
-        availableForDownload={availableForDownload}
-        selectedModel={selectedModel}
-        onSelectModel={selectModel}
-        onDownloadModel={downloadModel}
-        devices={devices}
-        selectedDeviceId={selectedDeviceId}
-        onDeviceChange={onDeviceChange}
-        status={status}
-        uiIsRecording={uiIsRecording}
-        onToggleRecording={handleToggle}
+        config={config} updateConfig={updateConfig}
+        models={models} availableForDownload={availableForDownload}
+        selectedModel={selectedModel} onSelectModel={selectModel} onDownloadModel={downloadModel}
+        devices={devices} selectedDeviceId={selectedDeviceId} onDeviceChange={onDeviceChange}
+        status={status} uiIsRecording={uiIsRecording} onToggleRecording={handleToggle}
         s={s}
       />
     </div>

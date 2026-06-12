@@ -1,43 +1,24 @@
-import type { Strings } from '../i18n/translations';
-
-interface Props {
-  onConfirm: () => void;
-  onCancel: () => void;
-  downloading: boolean;
-  downloadError: boolean;
-  s: Strings;
-}
-
-export default function DownloadModal({ onConfirm, onCancel, downloading, downloadError, s }: Props) {
+export default function DownloadModal({ onConfirm, onCancel, downloading, downloadError, s }: {
+  onConfirm: () => void; onCancel: () => void; downloading: boolean; downloadError: boolean; s: { punctuationModelNotFound: string; modalDescription: string; modalSize: string; yesDownload: string; noDisable: string; downloading: string; downloadFailedLabel: string };
+}) {
   return (
-    <div className="modal-overlay active">
-      <div className="modal-box">
-        <h3>{s.punctuationModelNotFound}</h3>
-        <p>
-          {s.modalDescription}
-          <br /><br />
-          <small style={{ color: '#888' }}>{s.modalSize}</small>
-        </p>
-        {downloadError && (
-          <p style={{ color: 'red', fontSize: 13, marginBottom: 12 }}>
-            {s.downloadFailedLabel}
-          </p>
-        )}
-        <div className="modal-buttons">
-          <button
-            className="modal-btn-secondary"
-            onClick={onCancel}
-            disabled={downloading}
-          >
-            {s.noDisable}
-          </button>
-          <button
-            className="modal-btn-primary"
-            onClick={onConfirm}
-            disabled={downloading}
-          >
-            {downloading ? s.downloading : s.yesDownload}
-          </button>
+    <div className="modal d-block" tabIndex={-1} style={{ backgroundColor: 'rgba(0,0,0,0.5)' }}>
+      <div className="modal-dialog modal-dialog-centered">
+        <div className="modal-content">
+          <div className="modal-header">
+            <h6 className="modal-title">{s.punctuationModelNotFound}</h6>
+          </div>
+          <div className="modal-body">
+            <p className="small">{s.modalDescription}</p>
+            <small className="text-muted">{s.modalSize}</small>
+            {downloadError && <div className="alert alert-danger py-1 px-2 mt-2 small mb-0">{s.downloadFailedLabel}</div>}
+          </div>
+          <div className="modal-footer">
+            <button className="btn btn-secondary btn-sm" onClick={onCancel} disabled={downloading}>{s.noDisable}</button>
+            <button className="btn btn-primary btn-sm" onClick={onConfirm} disabled={downloading}>
+              {downloading ? <><span className="spinner-border spinner-border-sm me-1" />{s.downloading}</> : s.yesDownload}
+            </button>
+          </div>
         </div>
       </div>
     </div>
