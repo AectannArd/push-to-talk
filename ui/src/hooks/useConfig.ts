@@ -14,7 +14,7 @@ const DEFAULTS: Config = {
   log_format: 'text',
   log_retention_hours: 2,
   punctuation_enabled: false,
-  ui_language: 'en',
+  ui_language: 'en-US',
 };
 
 const DEBOUNCE_MS = 500;

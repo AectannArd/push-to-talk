@@ -1,4 +1,4 @@
-import { translations, type Strings } from './translations';
+import { translations, type Lang, type Strings } from './translations';
 
 /**
  * Returns translated strings for the given language.
@@ -6,8 +6,8 @@ import { translations, type Strings } from './translations';
  * Falls back to 'en' for unknown languages.
  */
 export function useTranslation(lang: string | null | undefined): Strings {
-  const t = (lang === 'ru' ? translations.ru : translations.en);
-  return t;
+  const key: Lang = (lang === 'ru' || lang === 'ru-RU') ? 'ru-RU' : 'en-US';
+  return translations[key];
 }
 
 /**

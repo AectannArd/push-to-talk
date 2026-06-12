@@ -8,6 +8,7 @@ import { useTranslation } from './i18n/useTranslation';
 import { forwardLog } from './services/tauri';
 import ConfigForm from './components/ConfigForm';
 import StatusBar from './components/StatusBar';
+import FlagIcon from './components/FlagIcon';
 import './App.css';
 
 export default function App() {
@@ -90,6 +91,26 @@ export default function App() {
 
   return (
     <div className="container">
+      <div className="lang-switcher">
+        <div className="form_radio_group">
+          <div className="form_radio_group-item">
+            <input
+              id="lang-en" type="radio" name="ui_language" value="en-US"
+              checked={config.ui_language === 'en-US'}
+              onChange={() => updateConfig('ui_language', 'en-US')}
+            />
+            <label htmlFor="lang-en"><FlagIcon code="en-US" /> EN</label>
+          </div>
+          <div className="form_radio_group-item">
+            <input
+              id="lang-ru" type="radio" name="ui_language" value="ru-RU"
+              checked={config.ui_language === 'ru-RU'}
+              onChange={() => updateConfig('ui_language', 'ru-RU')}
+            />
+            <label htmlFor="lang-ru"><FlagIcon code="ru-RU" /> RU</label>
+          </div>
+        </div>
+      </div>
       <h1>{s.appTitle}</h1>
       <p className="subtitle">{s.appSubtitle}</p>
 

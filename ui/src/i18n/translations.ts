@@ -1,4 +1,4 @@
-export type Lang = 'en' | 'ru';
+export type Lang = 'en-US' | 'ru-RU';
 
 export interface Strings {
   // App shell
@@ -230,4 +230,4 @@ const ru: Strings = {
   error: 'error',
 };
 
-export const translations: Record<Lang, Strings> = { en, ru };
+export const translations: Record<Lang, Strings> = { 'en-US': en, 'ru-RU': ru };

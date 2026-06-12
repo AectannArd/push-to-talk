@@ -55,19 +55,6 @@ export default function ConfigForm({
     <div className="config-section">
       <h2 className="config-title">{s.configuration}</h2>
       <form onSubmit={(e) => e.preventDefault()}>
-        {/* ── UI Language ────────────────────────────── */}
-        <div className="form-group" style={{ maxWidth: 280 }}>
-          <label htmlFor="uiLanguage">UI Language / Язык интерфейса</label>
-          <select
-            id="uiLanguage"
-            value={config.ui_language || 'en'}
-            onChange={(e) => updateConfig('ui_language', e.target.value)}
-          >
-            <option value="en">English</option>
-            <option value="ru">Русский</option>
-          </select>
-        </div>
-
         {/* ── Common ─────────────────────────────────── */}
         <div className="section-title">{s.common}</div>
         <div className="common-grid">

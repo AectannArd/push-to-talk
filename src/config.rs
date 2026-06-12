@@ -108,7 +108,7 @@ pub struct Config {
 }
 
 fn default_ui_language() -> String {
-    "en".into()
+    "en-US".into()
 }
 
 impl Default for Config {
