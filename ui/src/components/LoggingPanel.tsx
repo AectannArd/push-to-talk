@@ -1,17 +1,19 @@
 import type { Config } from '../types';
+import type { Strings } from '../i18n/translations';
 
 interface Props {
   config: Config;
   updateConfig: (key: keyof Config, value: unknown) => void;
+  s: Strings;
 }
 
-export default function LoggingPanel({ config, updateConfig }: Props) {
+export default function LoggingPanel({ config, updateConfig, s }: Props) {
   return (
     <>
-      <div className="section-title">Logging</div>
+      <div className="section-title">{s.logging}</div>
       <div className="form-row">
         <div className="form-group">
-          <label htmlFor="logDir">Log Directory</label>
+          <label htmlFor="logDir">{s.logDirectory}</label>
           <input
             type="text"
             id="logDir"
@@ -20,34 +22,34 @@ export default function LoggingPanel({ config, updateConfig }: Props) {
           />
         </div>
         <div className="form-group">
-          <label htmlFor="logLevel">Log Level</label>
+          <label htmlFor="logLevel">{s.logLevel}</label>
           <select
             id="logLevel"
             value={config.log_level}
             onChange={(e) => updateConfig('log_level', e.target.value)}
           >
-            <option value="trace">trace</option>
-            <option value="debug">debug</option>
-            <option value="info">info</option>
-            <option value="warn">warn</option>
-            <option value="error">error</option>
+            <option value="trace">{s.trace}</option>
+            <option value="debug">{s.debug}</option>
+            <option value="info">{s.info}</option>
+            <option value="warn">{s.warn}</option>
+            <option value="error">{s.error}</option>
           </select>
         </div>
       </div>
       <div className="form-row">
         <div className="form-group">
-          <label htmlFor="logFormat">Log Format</label>
+          <label htmlFor="logFormat">{s.logFormat}</label>
           <select
             id="logFormat"
             value={config.log_format}
             onChange={(e) => updateConfig('log_format', e.target.value)}
           >
-            <option value="text">Text</option>
-            <option value="json">JSON</option>
+            <option value="text">{s.text}</option>
+            <option value="json">{s.json}</option>
           </select>
         </div>
         <div className="form-group">
-          <label htmlFor="logRetention">Log Retention (hours)</label>
+          <label htmlFor="logRetention">{s.logRetention}</label>
           <input
             type="number"
             id="logRetention"
@@ -58,7 +60,7 @@ export default function LoggingPanel({ config, updateConfig }: Props) {
           />
         </div>
       </div>
-      <div className="hint">Changes are saved automatically</div>
+      <div className="hint">{s.changesAutoSaved}</div>
     </>
   );
 }

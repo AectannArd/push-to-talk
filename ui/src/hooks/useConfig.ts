@@ -14,6 +14,7 @@ const DEFAULTS: Config = {
   log_format: 'text',
   log_retention_hours: 2,
   punctuation_enabled: false,
+  ui_language: 'en-US',
 };
 
 const DEBOUNCE_MS = 500;
@@ -41,6 +42,7 @@ export function useConfig(ready: boolean) {
           log_format: cfg.log_format || DEFAULTS.log_format,
           log_retention_hours: cfg.log_retention_hours ?? DEFAULTS.log_retention_hours,
           punctuation_enabled: cfg.punctuation_enabled ?? false,
+          ui_language: cfg.ui_language || 'en',
         });
         setLoaded(true);
         setTimeout(() => { isInitialLoad.current = false; }, 100);
@@ -63,6 +65,7 @@ export function useConfig(ready: boolean) {
     log_format: c.log_format,
     log_retention_hours: c.log_retention_hours,
     punctuation_enabled: c.punctuation_enabled,
+    ui_language: c.ui_language,
   }), []);
 
   const updateConfig = useCallback((key: keyof Config, value: unknown) => {

@@ -2,14 +2,16 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import DownloadModal from './DownloadModal';
 import { invoke } from '../services/tauri';
 import type { Config, Status, PunctuationModelStatus } from '../types';
+import type { Strings } from '../i18n/translations';
 
 interface Props {
   config: Config;
   updateConfig: (key: keyof Config, value: unknown) => void;
   status: Status;
+  s: Strings;
 }
 
-export default function PunctuationPanel({ config, updateConfig, status }: Props) {
+export default function PunctuationPanel({ config, updateConfig, status, s }: Props) {
   const [showModal, setShowModal] = useState(false);
   const [downloading, setDownloading] = useState(false);
   const [downloadError, setDownloadError] = useState(false);
@@ -20,24 +22,22 @@ export default function PunctuationPanel({ config, updateConfig, status }: Props
   const checkStatus = useCallback(async () => {
     const dirs = config.model_search_dirs || [];
     try {
-      const s = await invoke<PunctuationModelStatus>('check_punctuation_model', {
+      const st = await invoke<PunctuationModelStatus>('check_punctuation_model', {
         modelSearchDirs: dirs,
       });
-      if (s.found) {
+      if (st.found) {
         setPuncStatus({
           found: true,
-          text: status.is_service_running
-            ? '✓ Active — service running with punctuation'
-            : '✓ Model found — restart service to apply',
+          text: status.is_service_running ? s.punctuationActive : s.punctuationModelFound,
           klass: 'loaded',
         });
       } else {
-        setPuncStatus({ found: false, text: '⚠ Model not found in search directories', klass: 'missing' });
+        setPuncStatus({ found: false, text: s.punctuationModelMissing, klass: 'missing' });
       }
     } catch {
       setPuncStatus({ found: false, text: '…', klass: '' });
     }
-  }, [config.model_search_dirs, status.is_service_running]);
+  }, [config.model_search_dirs, status.is_service_running, s]);
 
   useEffect(() => {
     if (config.punctuation_enabled) checkStatus();
@@ -56,15 +56,11 @@ export default function PunctuationPanel({ config, updateConfig, status }: Props
     }
     try {
       const dirs = config.model_search_dirs || [];
-      const s = await invoke<PunctuationModelStatus>('check_punctuation_model', {
-        modelSearchDirs: dirs,
-      });
-      if (s.found) {
+      const st = await invoke<PunctuationModelStatus>('check_punctuation_model', { modelSearchDirs: dirs });
+      if (st.found) {
         setPuncStatus({
           found: true,
-          text: status.is_service_running
-            ? '✓ Active — service running with punctuation'
-            : '✓ Model found — restart service to apply',
+          text: status.is_service_running ? s.punctuationActive : s.punctuationModelFound,
           klass: 'loaded',
         });
       } else {
@@ -77,7 +73,7 @@ export default function PunctuationPanel({ config, updateConfig, status }: Props
     const dirs = config.model_search_dirs || [];
     const targetDir = dirs[0];
     if (!targetDir) {
-      alert('No model search directory configured. Set one in the Whisper Model section.');
+      alert(s.noModelDir);
       onModalCancel();
       return;
     }
@@ -94,13 +90,13 @@ export default function PunctuationPanel({ config, updateConfig, status }: Props
     try {
       await invoke('download_punctuation_model', { targetDir });
       clearInterval(progressInterval.current!);
-      setProgress({ active: false, file: 'Download complete! Restart the service to apply.', width: 100, percent: 100 });
+      setProgress({ active: false, file: s.downloadCompleteRestart, width: 100, percent: 100 });
       setShowModal(false);
       setDownloading(false);
       await checkStatus();
     } catch {
       clearInterval(progressInterval.current!);
-      setProgress((p) => ({ ...p, active: false, file: 'Download failed.' }));
+      setProgress((p) => ({ ...p, active: false, file: s.downloadFailedLabel }));
       setDownloading(false);
       setDownloadError(true);
     }
@@ -113,11 +109,11 @@ export default function PunctuationPanel({ config, updateConfig, status }: Props
 
   return (
     <>
-      <div className="section-title">Punctuation Restoration</div>
+      <div className="section-title">{s.punctuationRestoration}</div>
       <div className="form-group">
         <div className="toggle-row">
           <label className="toggle-label" htmlFor="punctuationEnabled">
-            Enable punctuation &amp; case restoration
+            {s.enablePunctuation}
           </label>
           <label className="toggle-switch">
             <input
@@ -129,10 +125,7 @@ export default function PunctuationPanel({ config, updateConfig, status }: Props
             <span className="toggle-slider" />
           </label>
         </div>
-        <div className="hint">
-          Uses BERT model to restore punctuation and correct casing in transcribed text.
-          Model: kontur-ai/sbert_punc_case_ru (ONNX, ~1.7 GB).
-        </div>
+        <div className="hint">{s.punctuationHint}</div>
       </div>
 
       {config.punctuation_enabled && (
@@ -141,7 +134,7 @@ export default function PunctuationPanel({ config, updateConfig, status }: Props
           <div style={{ marginTop: 8 }}>
             {puncStatus.klass === 'missing' && (
               <button type="button" className="btn btn-primary" onClick={startDownload} disabled={downloading}>
-                {downloading ? '⏳ Downloading...' : '⬇ Download Punctuation Model'}
+                {downloading ? s.downloading : s.downloadPunctuationModel}
               </button>
             )}
             <div className={`download-progress${progress.active ? ' active' : ''}`}>
@@ -161,6 +154,7 @@ export default function PunctuationPanel({ config, updateConfig, status }: Props
           onCancel={onModalCancel}
           downloading={downloading}
           downloadError={downloadError}
+          s={s}
         />
       )}
     </>

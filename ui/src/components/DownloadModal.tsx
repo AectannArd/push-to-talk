@@ -1,24 +1,26 @@
+import type { Strings } from '../i18n/translations';
+
 interface Props {
   onConfirm: () => void;
   onCancel: () => void;
   downloading: boolean;
   downloadError: boolean;
+  s: Strings;
 }
 
-export default function DownloadModal({ onConfirm, onCancel, downloading, downloadError }: Props) {
+export default function DownloadModal({ onConfirm, onCancel, downloading, downloadError, s }: Props) {
   return (
     <div className="modal-overlay active">
       <div className="modal-box">
-        <h3>Punctuation Model Not Found</h3>
+        <h3>{s.punctuationModelNotFound}</h3>
         <p>
-          The punctuation model (<code>model.onnx</code>) is not present in your model
-          directories. Would you like to download it from HuggingFace?
+          {s.modalDescription}
           <br /><br />
-          <small style={{ color: '#888' }}>~1.7 GB download. Model is only needed once.</small>
+          <small style={{ color: '#888' }}>{s.modalSize}</small>
         </p>
         {downloadError && (
           <p style={{ color: 'red', fontSize: 13, marginBottom: 12 }}>
-            Download failed. Please check your network connection and try again.
+            {s.downloadFailedLabel}
           </p>
         )}
         <div className="modal-buttons">
@@ -27,14 +29,14 @@ export default function DownloadModal({ onConfirm, onCancel, downloading, downlo
             onClick={onCancel}
             disabled={downloading}
           >
-            No, Disable
+            {s.noDisable}
           </button>
           <button
             className="modal-btn-primary"
             onClick={onConfirm}
             disabled={downloading}
           >
-            {downloading ? 'Downloading...' : 'Yes, Download'}
+            {downloading ? s.downloading : s.yesDownload}
           </button>
         </div>
       </div>
