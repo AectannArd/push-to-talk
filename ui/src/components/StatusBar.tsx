@@ -9,7 +9,7 @@ export default function StatusBar({ status, s }: { status: Status; s: Strings })
     <div className="card mb-3">
       <div className="card-body py-2">
         <div className="d-flex align-items-center gap-2 mb-2">
-          <span className={`badge bg-${bg}`} style={{ width: 12, height: 12, borderRadius: '50%', display: 'inline-block' }}>&nbsp;</span>
+          <span style={{ width: 12, height: 12, borderRadius: '50%', display: 'inline-block', backgroundColor: `var(--bs-${bg})`, flexShrink: 0 }} />
           <span className="fw-semibold">{text}</span>
         </div>
         <div className="row g-2 small">
