@@ -8,8 +8,63 @@ import { useTranslation } from './i18n/useTranslation';
 import { forwardLog } from './services/tauri';
 import ConfigForm from './components/ConfigForm';
 import StatusBar from './components/StatusBar';
-import FlagIcon from './components/FlagIcon';
+import LangSelect from './components/LangSelect';
 import './App.css';
+
+const LANG_OPTIONS: { code: string; label: string }[] = [
+  { code: 'en-US', label: 'EN' },
+  { code: 'ru-RU', label: 'RU' },
+  { code: 'de-DE', label: 'DE' },
+  { code: 'fr-FR', label: 'FR' },
+  { code: 'es-ES', label: 'ES' },
+  { code: 'it-IT', label: 'IT' },
+  { code: 'pt-PT', label: 'PT' },
+  { code: 'pl-PL', label: 'PL' },
+  { code: 'uk-UA', label: 'UA' },
+  { code: 'nl-NL', label: 'NL' },
+  { code: 'cs-CZ', label: 'CZ' },
+  { code: 'sv-SE', label: 'SE' },
+  { code: 'fi-FI', label: 'FI' },
+  { code: 'ro-RO', label: 'RO' },
+  { code: 'hu-HU', label: 'HU' },
+  { code: 'el-GR', label: 'EL' },
+  { code: 'bg-BG', label: 'BG' },
+  { code: 'da-DK', label: 'DA' },
+  { code: 'sk-SK', label: 'SK' },
+  { code: 'lt-LT', label: 'LT' },
+  { code: 'lv-LV', label: 'LV' },
+  { code: 'et-EE', label: 'EE' },
+  { code: 'sl-SI', label: 'SI' },
+  { code: 'hr-HR', label: 'HR' },
+  { code: 'no-NO', label: 'NO' },
+  { code: 'tr-TR', label: 'TR' },
+  { code: 'be-BY', label: 'BE' },
+  // Asia
+  { code: 'zh-CN', label: 'ZH' },
+  { code: 'ja-JP', label: 'JA' },
+  { code: 'ko-KR', label: 'KO' },
+  { code: 'hi-IN', label: 'HI' },
+  { code: 'ar-SA', label: 'AR' },
+  { code: 'th-TH', label: 'TH' },
+  { code: 'vi-VN', label: 'VI' },
+  { code: 'id-ID', label: 'ID' },
+  { code: 'ms-MY', label: 'MS' },
+  { code: 'fa-IR', label: 'FA' },
+  { code: 'he-IL', label: 'HE' },
+  { code: 'bn-BD', label: 'BN' },
+  { code: 'ur-PK', label: 'UR' },
+  { code: 'ta-IN', label: 'TA' },
+  { code: 'te-IN', label: 'TE' },
+  // Africa
+  { code: 'sw-KE', label: 'SW' },
+  { code: 'am-ET', label: 'AM' },
+  { code: 'zu-ZA', label: 'ZU' },
+  { code: 'af-ZA', label: 'AF' },
+  { code: 'ha-NG', label: 'HA' },
+  { code: 'yo-NG', label: 'YO' },
+  // Americas
+  { code: 'pt-BR', label: 'BR' },
+];
 
 export default function App() {
   const ready = useTauriReady();
@@ -92,24 +147,11 @@ export default function App() {
   return (
     <div className="container">
       <div className="lang-switcher">
-        <div className="form_radio_group">
-          <div className="form_radio_group-item">
-            <input
-              id="lang-en" type="radio" name="ui_language" value="en-US"
-              checked={config.ui_language === 'en-US'}
-              onChange={() => updateConfig('ui_language', 'en-US')}
-            />
-            <label htmlFor="lang-en"><FlagIcon code="en-US" /> EN</label>
-          </div>
-          <div className="form_radio_group-item">
-            <input
-              id="lang-ru" type="radio" name="ui_language" value="ru-RU"
-              checked={config.ui_language === 'ru-RU'}
-              onChange={() => updateConfig('ui_language', 'ru-RU')}
-            />
-            <label htmlFor="lang-ru"><FlagIcon code="ru-RU" /> RU</label>
-          </div>
-        </div>
+        <LangSelect
+          value={config.ui_language || 'en-US'}
+          onChange={(code) => updateConfig('ui_language', code)}
+          options={LANG_OPTIONS}
+        />
       </div>
       <h1>{s.appTitle}</h1>
       <p className="subtitle">{s.appSubtitle}</p>

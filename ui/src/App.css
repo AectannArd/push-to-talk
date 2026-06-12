@@ -225,53 +225,47 @@ input:checked + .toggle-slider:before { transform: translateX(22px); }
     border-radius: 5px; transition: width 0.3s;
 }
 
-/* ── Language switcher (segmented radio group) ───── */
+/* ── Language switcher (custom combobox) ─────────── */
 .lang-switcher {
     position: absolute; top: 16px; right: 20px;
 }
-.form_radio_group {
+.lang-select {
+    position: relative;
     display: inline-block;
-    overflow: hidden;
-}
-.form_radio_group-item {
-    display: inline-block;
-    float: left;
-}
-.form_radio_group input[type=radio] {
-    display: none;
-}
-.form_radio_group label {
-    display: inline-flex; align-items: center;
-    cursor: pointer;
-    padding: 0 11px;
-    line-height: 32px;
-    border: 1px solid #ccc;
-    border-right: none;
     user-select: none;
-    font-size: 12px;
-    font-weight: 700;
-    letter-spacing: 0.3px;
-    color: #666;
-    background: #fff;
-    transition: background 0.2s, color 0.2s;
 }
-.form_radio_group .form_radio_group-item:first-child label {
-    border-radius: 6px 0 0 6px;
+.lang-select-trigger {
+    display: inline-flex; align-items: center; gap: 5px;
+    padding: 4px 8px;
+    border: 1px solid #ccc; border-radius: 6px;
+    background: #fff; color: #444;
+    font-size: 13px; font-weight: 700;
+    cursor: pointer; outline: none;
+    min-width: 0; white-space: nowrap;
+    transition: border-color 0.2s;
 }
-.form_radio_group .form_radio_group-item:last-child label {
-    border-radius: 0 6px 6px 0;
-    border-right: 1px solid #ccc;
+.lang-select-trigger:hover { border-color: #667eea; }
+.lang-select-trigger:focus { border-color: #667eea; }
+.lang-select-arrow {
+    font-size: 8px; margin-left: 1px; color: #999;
 }
-.form_radio_group input[type=radio]:checked + label {
-    background: #667eea;
-    color: #fff;
-    border-color: #667eea;
+.lang-select-dropdown {
+    position: absolute; top: 100%; right: 0; z-index: 100;
+    margin-top: 3px;
+    background: #fff; border: 1px solid #ccc; border-radius: 6px;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.12);
+    min-width: 0; overflow: hidden;
 }
-.form_radio_group label:hover {
-    color: #667eea;
+.lang-select-option {
+    display: flex; align-items: center; gap: 6px;
+    width: 100%; padding: 6px 10px;
+    border: none; background: #fff; color: #444;
+    font-size: 13px; font-weight: 600;
+    cursor: pointer; outline: none; text-align: left;
+    white-space: nowrap;
+    transition: background 0.15s;
 }
-.form_radio_group input[type=radio]:checked + label:hover {
-    color: #fff;
-}
+.lang-select-option:hover { background: #f0f2ff; }
+.lang-select-option.active { background: #667eea; color: #fff; }
 
 .container { position: relative; }
