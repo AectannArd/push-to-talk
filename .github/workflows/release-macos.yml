@@ -39,7 +39,7 @@ jobs:
       - name: Build release
         run: |
           export MACOSX_DEPLOYMENT_TARGET=10.15
-          cargo tauri build --no-default-features
+          cargo tauri build -- --no-default-features
 
       - name: Upload DMG
         uses: softprops/action-gh-release@v2

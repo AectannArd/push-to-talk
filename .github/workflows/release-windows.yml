@@ -37,7 +37,7 @@ jobs:
         run: cargo install tauri-cli --version "^2"
 
       - name: Build release (CPU)
-        run: cargo tauri build --no-default-features
+        run: cargo tauri build -- --no-default-features
 
       - name: Rename CPU installer
         run: |
@@ -85,7 +85,7 @@ jobs:
         run: cargo install tauri-cli --version "^2"
 
       - name: Build release (CUDA)
-        run: cargo tauri build --features cuda
+        run: cargo tauri build -- --features cuda
 
       - name: Rename CUDA installer
         run: |
