@@ -68,9 +68,9 @@ jobs:
           cache-dependency-path: ui/package-lock.json
 
       - name: Setup CUDA Toolkit
-        uses: Jimver/cuda-toolkit@v0.2
+        uses: Jimver/cuda-toolkit@v0.2.35
         with:
-          cuda: '12.6'
+          cuda: '13.2.0'
 
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
