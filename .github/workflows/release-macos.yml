@@ -37,6 +37,8 @@ jobs:
         run: cargo install tauri-cli --version "^2"
 
       - name: Build release
+        env:
+          MACOSX_DEPLOYMENT_TARGET: '10.15'
         run: cargo tauri build
 
       - name: Upload DMG
