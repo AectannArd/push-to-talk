@@ -55,5 +55,5 @@ tauri-build = { version = "2", features = [] }
 ureq = "3"
 
 [features]
-default = ["cuda"]
+default = []
 cuda = ["whisper-cpp-plus/cuda"]
