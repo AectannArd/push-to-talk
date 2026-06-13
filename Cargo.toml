@@ -8,7 +8,7 @@ description = "Push-to-talk voice input using Whisper"
 anyhow = "1"
 arboard = "3"
 cpal = "0.18"
-whisper-cpp-plus = { version = "0.1", default-features = false }
+whisper-cpp-plus = { version = "=0.1.5", default-features = false }
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter", "fmt", "json"] }
 tracing-appender = "0.2"
@@ -34,13 +34,13 @@ tauri-plugin-single-instance = "2"
 
 # macOS: Metal GPU + NSPasteboard
 [target.'cfg(target_os = "macos")'.dependencies]
-whisper-cpp-plus = { version = "0.1", default-features = false, features = ["metal"] }
+whisper-cpp-plus = { version = "=0.1.5", default-features = false, features = ["metal"] }
 objc2-foundation = { version = "0.3", features = ["NSString", "std"] }
 objc2-app-kit = { version = "0.3", features = ["NSPasteboard", "std"] }
 
 # Windows
 [target.'cfg(windows)'.dependencies]
-whisper-cpp-plus = { version = "0.1", default-features = false }
+whisper-cpp-plus = { version = "=0.1.5", default-features = false }
 windows = { version = "0.56", features = [
   "Win32_Foundation",
   "Win32_Graphics_Gdi",
