@@ -21,6 +21,10 @@ once_cell = "1"
 shellexpand = "3"
 futures-util = "0.3"
 
+[features]
+default = []
+cuda = ["whisper-cpp-plus/cuda"]
+
 # ONNX Runtime for punctuation restoration (load-dynamic avoids DLL lock race)
 ort = { version = "2.0.0-rc.12", features = ["load-dynamic", "api-18", "tracing"], default-features = false }
 # HuggingFace tokenizer (WordPiece) for punctuation model
@@ -38,9 +42,9 @@ whisper-cpp-plus = { version = "0.1", default-features = false, features = ["met
 objc2-foundation = { version = "0.3", features = ["NSString", "std"] }
 objc2-app-kit = { version = "0.3", features = ["NSPasteboard", "std"] }
 
-# Windows: CUDA GPU
+# Windows: CUDA GPU enabled via `cargo build --features cuda`
 [target.'cfg(windows)'.dependencies]
-whisper-cpp-plus = { version = "0.1", default-features = false, features = ["cuda"] }
+whisper-cpp-plus = { version = "0.1", default-features = false }
 windows = { version = "0.56", features = [
   "Win32_Foundation",
   "Win32_Graphics_Gdi",
