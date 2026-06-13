@@ -12,6 +12,8 @@ jobs:
   build:
     name: Build macOS DMG
     runs-on: macos-latest
+    env:
+      MACOSX_DEPLOYMENT_TARGET: '10.15'
 
     steps:
       - name: Checkout
@@ -37,9 +39,7 @@ jobs:
         run: cargo install tauri-cli --version "^2"
 
       - name: Build release
-        run: |
-          export MACOSX_DEPLOYMENT_TARGET=10.15
-          cargo tauri build -- --no-default-features
+        run: cargo tauri build -- --no-default-features
 
       - name: Upload DMG
         uses: softprops/action-gh-release@v2
