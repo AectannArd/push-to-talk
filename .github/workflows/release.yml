@@ -47,55 +47,6 @@ jobs:
           path: dist/macos/*.app
           retention-days: 7
 
-  # Build for Linux
-  build-linux:
-    name: Build Linux
-    runs-on: ubuntu-latest
-    
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Install Rust
-        uses: dtolnay/rust-action@stable
-        with:
-          toolchain: stable
-
-      - name: Install dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y \
-            libasound2-dev \
-            libudev-dev \
-            libxcb1-dev \
-            libxcb-render0-dev \
-            libxcb-shape0-dev \
-            libxcb-xfixes0-dev \
-            pkg-config
-
-      - name: Get version from tag
-        id: get_version
-        run: echo "VERSION=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
-
-      - name: Build release binary
-        run: cargo build --release
-
-      - name: Create distribution archive
-        run: |
-          mkdir -p dist/linux
-          cp target/release/$BINARY_NAME dist/linux/
-          cp README.md dist/linux/
-          cp -r scripts dist/linux/ 2>/dev/null || true
-          cd dist/linux
-          tar -czvf ../${{ env.BINARY_NAME }}-${{ steps.get_version.outputs.VERSION }}-linux-x86_64.tar.gz .
-
-      - name: Upload artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: linux-binary
-          path: dist/*.tar.gz
-          retention-days: 7
-
   # Build for Windows
   build-windows:
     name: Build Windows
@@ -136,7 +87,7 @@ jobs:
   # Create GitHub Release
   create-release:
     name: Create GitHub Release
-    needs: [build-macos, build-linux, build-windows]
+    needs: [build-macos, build-windows]
     runs-on: ubuntu-latest
     
     steps:
@@ -148,12 +99,6 @@ jobs:
         with:
           name: macos-dmg
           path: artifacts/macos
-
-      - name: Download Linux binary
-        uses: actions/download-artifact@v4
-        with:
-          name: linux-binary
-          path: artifacts/linux
 
       - name: Download Windows binary
         uses: actions/download-artifact@v4
@@ -194,11 +139,6 @@ jobs:
             2. Drag `push-to-talk.app` to Applications folder
             3. Grant required permissions (Input Monitoring, Accessibility, Microphone)
             
-            ### Linux
-            1. Extract the archive: `tar -xzf push-to-talk-*-linux-x86_64.tar.gz`
-            2. Move binary to PATH: `sudo mv push-to-talk /usr/local/bin/`
-            3. Run: `push-to-talk`
-            
             ### Windows
             1. Extract the ZIP archive
             2. Run `push-to-talk.exe`
@@ -213,7 +153,6 @@ jobs:
             Config file location: `~/.push-to-talk/config.toml`
           files: |
             artifacts/macos/*.dmg
-            artifacts/linux/*.tar.gz
             artifacts/windows/*.zip
           draft: false
           prerelease: false
