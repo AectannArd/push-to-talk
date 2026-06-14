@@ -2,7 +2,7 @@
 
 [![Rust](https://img.shields.io/badge/Rust-1.85+-orange.svg?logo=rust)](https://www.rust-lang.org)
 [![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
-[![Platform](https://img.shields.io/badge/Platform-macOS%20%7C%20Linux%20%7C%20Windows-lightgrey.svg)](#requirements)
+[![Platform](https://img.shields.io/badge/Platform-macOS%20%7C%20Windows-lightgrey.svg)](#requirements)
 
 Desktop push-to-talk voice input. Press a global hotkey, speak, release —
 text is transcribed locally via Whisper and pasted into the active window.
@@ -133,7 +133,7 @@ transcription, without restarting the app.
 src/
 ├── main.rs           Tauri entry point, IPC commands, global state, tray, logging
 ├── config.rs         TOML config at ~/.push-to-talk/config.toml
-├── recorder.rs       Audio capture via cpal (i16 on Windows, f32 on macOS/Linux)
+├── recorder.rs       Audio capture via cpal (i16 on Windows, f32 on macOS)
 ├── transcriber.rs    Whisper.cpp wrapper (whisper-cpp-plus), log bridge, greedy decoding
 ├── punctuator.rs     ONNX Runtime BERT model for punctuation/case restoration
 └── voice_service.rs  Background orchestrator: recorder + transcriber + clipboard
@@ -147,13 +147,13 @@ ui/                   React + TypeScript frontend (Vite + Bootstrap Morph dark t
 
 ## Platform support
 
-| Feature | Windows | macOS | Linux |
-|---------|---------|-------|-------|
-| GPU acceleration | CUDA | Metal | CPU only |
-| Audio format | i16 (WASAPI) | f32 (CoreAudio) | f32 (ALSA/Pulse) |
-| Auto-paste | `keybd_event` Ctrl+V | AppleScript Cmd+V | Manual |
-| System tray | ✓ | ✓ | ✓ |
-| Installer | NSIS + MSI | DMG | — |
+| Feature | Windows | macOS |
+|---------|---------|-------|
+| GPU acceleration | CUDA | Metal |
+| Audio format | i16 (WASAPI) | f32 (CoreAudio) |
+| Auto-paste | `keybd_event` Ctrl+V | AppleScript Cmd+V |
+| System tray | ✓ | ✓ |
+| Installer | NSIS + MSI | DMG |
 
 ## Device resilience
 
