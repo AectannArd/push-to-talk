@@ -3,7 +3,7 @@
 **/.idea
 **/*.iml
 **/logs
-**/*.lock
+
 **/.nessy
 **/dist
 **/crash_report*
