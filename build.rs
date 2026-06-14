@@ -10,15 +10,6 @@ use std::process::Command;
 
 fn main() {
     download_ort_libs();
-
-    // whisper-cpp-plus-sys produces C++ static libraries but does not
-    // emit a link directive for libc++ on macOS. Without this the final
-    // binary fails to link with undefined C++ ABI symbols.
-    let target = std::env::var("TARGET").unwrap_or_default();
-    if target.contains("apple") {
-        println!("cargo:rustc-link-lib=c++");
-    }
-
     tauri_build::build();
 }
 

@@ -1,2 +1,8 @@
 [build]
 jobs = 2
+
+# whisper-cpp-plus-sys produces C++ static libraries but does not emit
+# rustc-link-lib=c++ on macOS — the final binary fails with undefined
+# C++ ABI symbols (___cxa_* , ___gxx_personality_v0, etc.)
+[target.'cfg(target_os = "macos")']
+rustflags = ["-C", "link-arg=-lc++"]
