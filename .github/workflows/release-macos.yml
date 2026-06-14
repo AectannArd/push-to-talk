@@ -12,6 +12,8 @@ jobs:
   build:
     name: Build macOS DMG
     runs-on: macos-latest
+    env:
+      CMAKE_OSX_DEPLOYMENT_TARGET: '10.15'
 
     steps:
       - name: Checkout
