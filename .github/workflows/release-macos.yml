@@ -29,6 +29,13 @@ jobs:
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
 
+      - name: Cache Rust
+        uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: release
+          cache-directories: |
+            ort-dylibs
+
       - name: Install frontend dependencies
         run: cd ui && npm ci
 

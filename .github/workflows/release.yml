@@ -24,6 +24,13 @@ jobs:
         with:
           toolchain: stable
 
+      - name: Cache Rust
+        uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: release-legacy
+          cache-directories: |
+            ort-dylibs
+
       - name: Get version from tag
         id: get_version
         run: echo "VERSION=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
@@ -60,6 +67,13 @@ jobs:
         uses: dtolnay/rust-action@stable
         with:
           toolchain: stable
+
+      - name: Cache Rust
+        uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: release-legacy
+          cache-directories: |
+            ort-dylibs
 
       - name: Get version from tag
         id: get_version
