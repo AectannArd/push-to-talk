@@ -10,6 +10,15 @@ use std::process::Command;
 
 fn main() {
     download_ort_libs();
+
+    // whisper-cpp-plus-sys produces C++ static libraries but does not
+    // emit a link directive for libc++ on macOS. Without this the final
+    // binary fails to link with undefined C++ ABI symbols.
+    let target = std::env::var("TARGET").unwrap_or_default();
+    if target.contains("apple") {
+        println!("cargo:rustc-link-lib=c++");
+    }
+
     tauri_build::build();
 }
 
@@ -31,12 +40,6 @@ fn download_ort_libs() {
             "macos",
             "libonnxruntime.dylib",
             "https://github.com/microsoft/onnxruntime/releases/download/v1.20.1/onnxruntime-osx-universal2-1.20.1.tgz",
-        )
-    } else if target.contains("linux") {
-        (
-            "linux",
-            "libonnxruntime.so",
-            "https://github.com/microsoft/onnxruntime/releases/download/v1.20.1/onnxruntime-linux-x64-1.20.1.tgz",
         )
     } else {
         return; // unsupported target — skip
@@ -131,7 +134,6 @@ fn copy_ort_files(src: &PathBuf, dest: &PathBuf, platform: &str) {
     let wanted: &[&str] = match platform {
         "windows" => &["onnxruntime.dll", "onnxruntime_providers_shared.dll"],
         "macos" => &["libonnxruntime.dylib"],
-        "linux" => &["libonnxruntime.so"],
         _ => return,
     };
 
