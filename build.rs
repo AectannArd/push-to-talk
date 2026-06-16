@@ -95,7 +95,13 @@ fn download_ort_libs() {
     }
 
     // Create destination directory
-    let _ = std::fs::create_dir_all(&dest_dir);
+    if let Err(e) = std::fs::create_dir_all(&dest_dir) {
+        println!(
+            "cargo:warning=  Failed to create {}: {e}",
+            dest_dir.display()
+        );
+        return;
+    }
 
     println!("cargo:warning=Downloading ONNX Runtime for {platform}...");
     println!("cargo:warning=  {archive_url}");
@@ -124,7 +130,13 @@ fn download_ort_libs() {
     // Extract using `tar` — works for both .zip and .tar.gz on all modern platforms.
     // Windows 10 build 17063+ includes tar with zip support.
     let extract_dir = dest_dir.join("_extract");
-    let _ = std::fs::create_dir_all(&extract_dir);
+    if let Err(e) = std::fs::create_dir_all(&extract_dir) {
+        println!(
+            "cargo:warning=  Failed to create {}: {e}",
+            extract_dir.display()
+        );
+        return;
+    }
 
     let mut tar_child = match Command::new("tar")
         .arg("xf")
