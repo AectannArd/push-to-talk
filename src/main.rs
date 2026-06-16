@@ -682,10 +682,11 @@ fn init_logging(config: &config::Config) {
         .with_line_number(false)
         .with_filter(console_filter);
 
-    // File layer — text or JSON depending on config
+    // File layer — text or JSON depending on config, no ANSI escape codes
     let file_layer = {
         let layer = fmt::layer()
             .with_writer(file_appender)
+            .with_ansi(false)
             .with_target(false)
             .with_thread_ids(false)
             .with_file(false)
