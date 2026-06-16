@@ -125,7 +125,10 @@ fn download_ort_libs() {
         }
     };
 
-    println!("cargo:warning=  Downloaded {:.1} MB", archive_bytes.len() as f64 / (1024.0 * 1024.0));
+    println!(
+        "cargo:warning=  Downloaded {:.1} MB",
+        archive_bytes.len() as f64 / (1024.0 * 1024.0)
+    );
 
     // Extract using `tar` — works for both .zip and .tar.gz on all modern platforms.
     // Windows 10 build 17063+ includes tar with zip support.
@@ -152,7 +155,10 @@ fn download_ort_libs() {
         Err(e) => {
             println!("cargo:warning=  Failed to spawn tar: {e}");
             if let Err(e) = std::fs::remove_dir_all(&extract_dir) {
-                println!("cargo:warning=  Failed to clean up {}: {e}", extract_dir.display());
+                println!(
+                    "cargo:warning=  Failed to clean up {}: {e}",
+                    extract_dir.display()
+                );
             }
             return;
         }
@@ -163,7 +169,10 @@ fn download_ort_libs() {
         if let Err(e) = stdin.write_all(&archive_bytes) {
             println!("cargo:warning=  Failed to write archive to tar stdin: {e}");
             if let Err(e) = std::fs::remove_dir_all(&extract_dir) {
-                println!("cargo:warning=  Failed to clean up {}: {e}", extract_dir.display());
+                println!(
+                    "cargo:warning=  Failed to clean up {}: {e}",
+                    extract_dir.display()
+                );
             }
             return;
         }
@@ -184,14 +193,20 @@ fn download_ort_libs() {
         Ok(s) => {
             println!("cargo:warning=  tar exited with {s}");
             if let Err(e) = std::fs::remove_dir_all(&extract_dir) {
-                println!("cargo:warning=  Failed to clean up {}: {e}", extract_dir.display());
+                println!(
+                    "cargo:warning=  Failed to clean up {}: {e}",
+                    extract_dir.display()
+                );
             }
             return;
         }
         Err(e) => {
             println!("cargo:warning=  tar wait failed: {e}");
             if let Err(e) = std::fs::remove_dir_all(&extract_dir) {
-                println!("cargo:warning=  Failed to clean up {}: {e}", extract_dir.display());
+                println!(
+                    "cargo:warning=  Failed to clean up {}: {e}",
+                    extract_dir.display()
+                );
             }
             return;
         }
@@ -202,8 +217,11 @@ fn download_ort_libs() {
 
     // Clean up extraction directory
     if let Err(e) = std::fs::remove_dir_all(&extract_dir) {
-                println!("cargo:warning=  Failed to clean up {}: {e}", extract_dir.display());
-            }
+        println!(
+            "cargo:warning=  Failed to clean up {}: {e}",
+            extract_dir.display()
+        );
+    }
 
     // Verify all wanted files are present, not just the marker
     let wanted: &[&str] = match platform {
@@ -224,7 +242,10 @@ fn download_ort_libs() {
         if let Err(e) = std::fs::write(&version_marker, ORT_VERSION) {
             println!("cargo:warning=  Failed to write version marker: {e}");
         }
-        println!("cargo:warning=  ✓ ONNX Runtime {} libs ready for bundling", ORT_VERSION);
+        println!(
+            "cargo:warning=  ✓ ONNX Runtime {} libs ready for bundling",
+            ORT_VERSION
+        );
     } else {
         println!("cargo:warning=  ✗ Extraction completed but some libs not found — check archive structure");
     }

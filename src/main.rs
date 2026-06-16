@@ -8,9 +8,9 @@ mod recorder;
 mod transcriber;
 mod voice_service;
 
-use std::sync::OnceLock;
 use serde::{Deserialize, Serialize};
 use std::path::Path;
+use std::sync::OnceLock;
 use std::sync::{
     atomic::{AtomicBool, Ordering},
     Arc, Mutex,
@@ -541,7 +541,11 @@ async fn download_punctuation_model(target_dir: String) -> Result<String, String
 
     let files: &[(&str, &str, &str)] = &[
         ("model.onnx", PUNCTUATION_MODEL_URL, "model.onnx.part"),
-        ("tokenizer.json", PUNCTUATION_TOKENIZER_URL, "tokenizer.json.part"),
+        (
+            "tokenizer.json",
+            PUNCTUATION_TOKENIZER_URL,
+            "tokenizer.json.part",
+        ),
     ];
 
     let client = Client::new();
@@ -560,7 +564,10 @@ async fn download_punctuation_model(target_dir: String) -> Result<String, String
             .map_err(|e| format!("Failed to start download for {name}: {e}"))?;
 
         if !response.status().is_success() {
-            return Err(format!("Download failed for {name}: HTTP {}", response.status()));
+            return Err(format!(
+                "Download failed for {name}: HTTP {}",
+                response.status()
+            ));
         }
 
         let total_size = response.content_length();
@@ -860,7 +867,10 @@ fn main() {
                     // Binary: Contents/MacOS/push-to-talk
                     // Resources: Contents/Resources/libonnxruntime.dylib
                     let res_dir = exe_dir.parent().map(|p| p.join("Resources"));
-                    ("libonnxruntime.dylib", res_dir.unwrap_or_else(|| exe_dir.to_path_buf()))
+                    (
+                        "libonnxruntime.dylib",
+                        res_dir.unwrap_or_else(|| exe_dir.to_path_buf()),
+                    )
                 };
 
                 #[cfg(target_os = "linux")]

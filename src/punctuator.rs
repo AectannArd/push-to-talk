@@ -72,11 +72,7 @@ impl Punctuator {
             .map_err(|e| anyhow::anyhow!("Failed to set intra threads: {}", e))?
             .commit_from_file(model_path)
             .map_err(|e| {
-                anyhow::anyhow!(
-                    "Failed to load ONNX model {}: {}",
-                    model_path.display(),
-                    e
-                )
+                anyhow::anyhow!("Failed to load ONNX model {}: {}", model_path.display(), e)
             })?;
 
         tracing::info!(
@@ -108,8 +104,9 @@ impl Punctuator {
                 );
             }
         } else {
-            find_punctuation_model(&config.model_search_dirs)
-                .context("No punctuation model found. Place model.onnx in <model_dir>/punctuator/")?
+            find_punctuation_model(&config.model_search_dirs).context(
+                "No punctuation model found. Place model.onnx in <model_dir>/punctuator/",
+            )?
         };
 
         let tokenizer_path = if let Some(ref p) = config.punctuation_tokenizer_path {
@@ -163,9 +160,9 @@ impl Punctuator {
     /// Does not need `&mut self` — only tokenization, no inference.
     fn count_tokens(&self, words: &[&str]) -> usize {
         let owned: Vec<String> = words.iter().map(|s| s.to_string()).collect();
-        let input = tokenizers::EncodeInput::Single(
-            tokenizers::InputSequence::PreTokenizedOwned(std::borrow::Cow::Owned(owned)),
-        );
+        let input = tokenizers::EncodeInput::Single(tokenizers::InputSequence::PreTokenizedOwned(
+            std::borrow::Cow::Owned(owned),
+        ));
         match self.tokenizer.encode(input, true) {
             Ok(enc) => enc.len(),
             Err(_) => usize::MAX, // conservatively assume too long on error
@@ -188,9 +185,9 @@ impl Punctuator {
     fn punctuate_batch(&mut self, words: &[&str]) -> Result<String> {
         // 1. Tokenize with word-level splitting (equivalent to is_split_into_words=True)
         let owned: Vec<String> = words.iter().map(|s| s.to_string()).collect();
-        let input = tokenizers::EncodeInput::Single(
-            tokenizers::InputSequence::PreTokenizedOwned(std::borrow::Cow::Owned(owned)),
-        );
+        let input = tokenizers::EncodeInput::Single(tokenizers::InputSequence::PreTokenizedOwned(
+            std::borrow::Cow::Owned(owned),
+        ));
         let encoding = self
             .tokenizer
             .encode(input, true) // add_special_tokens ([CLS] / [SEP])
@@ -258,7 +255,9 @@ impl Punctuator {
         for (word_idx, &word) in words.iter().enumerate() {
             // Find the first token position belonging to this word
             let word_idx_u32 = word_idx as u32;
-            let label_pos = word_ids.iter().position(|opt: &Option<u32>| *opt == Some(word_idx_u32));
+            let label_pos = word_ids
+                .iter()
+                .position(|opt: &Option<u32>| *opt == Some(word_idx_u32));
 
             let label = match label_pos {
                 Some(pos) if pos < predictions.len() => PuncLabel::from_id(predictions[pos]),
@@ -303,15 +302,11 @@ fn apply_label(word: &str, label: PuncLabel) -> String {
 
     // Append punctuation
     let punct = match label {
-        PuncLabel::LowerPeriod
-        | PuncLabel::UpperPeriod
-        | PuncLabel::UpperTotalPeriod => ".",
+        PuncLabel::LowerPeriod | PuncLabel::UpperPeriod | PuncLabel::UpperTotalPeriod => ".",
 
         PuncLabel::LowerComma | PuncLabel::UpperComma | PuncLabel::UpperTotalComma => ",",
 
-        PuncLabel::LowerQuestion
-        | PuncLabel::UpperQuestion
-        | PuncLabel::UpperTotalQuestion => "?",
+        PuncLabel::LowerQuestion | PuncLabel::UpperQuestion | PuncLabel::UpperTotalQuestion => "?",
 
         _ => "",
     };

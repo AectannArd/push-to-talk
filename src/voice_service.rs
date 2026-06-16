@@ -93,9 +93,8 @@ impl VoiceServiceHandle {
         let tr = Arc::new(Mutex::new(transcriber));
 
         // ── Initialize recorder ──────────────────────────────────────
-        let (recorder, _device_info) =
-            crate::recorder::Recorder::new(config.device_id.as_deref())
-                .map_err(|e| anyhow::anyhow!("Failed to initialize recorder: {}", e))?;
+        let (recorder, _device_info) = crate::recorder::Recorder::new(config.device_id.as_deref())
+            .map_err(|e| anyhow::anyhow!("Failed to initialize recorder: {}", e))?;
         let rec = Arc::new(Mutex::new(recorder));
 
         // ── Channels ─────────────────────────────────────────────────
@@ -172,12 +171,7 @@ impl VoiceServiceHandle {
         let monitor_stop = Arc::new(AtomicBool::new(false));
         let monitor_stop_clone = monitor_stop.clone();
         let monitor_handle = thread::spawn(move || {
-            monitor_device_changes(
-                cmd_tx_for_monitor,
-                rec,
-                app_config,
-                monitor_stop_clone,
-            );
+            monitor_device_changes(cmd_tx_for_monitor, rec, app_config, monitor_stop_clone);
         });
 
         Ok(Self {
@@ -343,10 +337,7 @@ fn monitor_device_changes(
                             info!("✅ Recorder reinitialized for: {}", first.name);
                         }
                         Err(e) => {
-                            error!(
-                                "❌ Failed to create recorder for new device: {}",
-                                e
-                            );
+                            error!("❌ Failed to create recorder for new device: {}", e);
                             continue;
                         }
                     }
@@ -414,7 +405,9 @@ fn find_model(config: &Config) -> Option<std::path::PathBuf> {
             return Some(std::path::PathBuf::from(model));
         }
     }
-    list_ggml_models(&config.model_search_dirs).into_iter().next()
+    list_ggml_models(&config.model_search_dirs)
+        .into_iter()
+        .next()
 }
 
 // ── Platform-specific clipboard & paste ──────────────────────────────
