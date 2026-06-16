@@ -46,6 +46,9 @@ windows = { version = "0.62", features = [
 [build-dependencies]
 tauri-build = { version = "2", features = [] }
 ureq = "3"
+zip = "2"
+flate2 = "1"
+tar = "0.4"
 
 [features]
 default = []

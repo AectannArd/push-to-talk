@@ -4,10 +4,9 @@
 //! The native libraries are cached in `ort-dylibs/{platform}/` and only
 //! downloaded once — subsequent builds reuse the cached files.
 
-use std::collections::HashMap;
-use std::io::{Read, Write};
+use std::collections::{HashMap, HashSet};
+use std::io::Read;
 use std::path::{Path, PathBuf};
-use std::process::Command;
 
 fn main() {
     download_ort_libs();
@@ -151,105 +150,18 @@ fn download_ort_libs() {
         archive_bytes.len() as f64 / (1024.0 * 1024.0)
     );
 
-    // Extract using `tar` — works for both .zip and .tar.gz on all modern platforms.
-    // Windows 10 build 17063+ includes tar with zip support.
-    let extract_dir = dest_dir.join("_extract");
-    if let Err(e) = std::fs::create_dir_all(&extract_dir) {
-        println!(
-            "cargo:warning=  Failed to create {}: {e}",
-            extract_dir.display()
-        );
+    // Extract in pure Rust — no external tar dependency
+    let extract_result = if platform == "windows" {
+        extract_zip(&archive_bytes, &dest_dir, wanted)
+    } else {
+        extract_tgz(&archive_bytes, &dest_dir, wanted)
+    };
+    if let Err(e) = extract_result {
+        println!("cargo:warning=  Extraction failed: {e}");
         return;
     }
 
-    let mut tar_child = match Command::new("tar")
-        .arg("xf")
-        .arg("-")
-        .arg("-C")
-        .arg(&extract_dir)
-        .stdin(std::process::Stdio::piped())
-        .stdout(std::process::Stdio::null())
-        .stderr(std::process::Stdio::piped())
-        .spawn()
-    {
-        Ok(child) => child,
-        Err(e) => {
-            println!("cargo:warning=  Failed to spawn tar: {e}");
-            if let Err(e) = std::fs::remove_dir_all(&extract_dir) {
-                println!(
-                    "cargo:warning=  Failed to clean up {}: {e}",
-                    extract_dir.display()
-                );
-            }
-            return;
-        }
-    };
-
-    // Feed archive bytes to tar's stdin
-    if let Some(stdin) = tar_child.stdin.as_mut() {
-        if let Err(e) = stdin.write_all(&archive_bytes) {
-            println!("cargo:warning=  Failed to write archive to tar stdin: {e}");
-            if let Err(e) = std::fs::remove_dir_all(&extract_dir) {
-                println!(
-                    "cargo:warning=  Failed to clean up {}: {e}",
-                    extract_dir.display()
-                );
-            }
-            return;
-        }
-    }
-
-    let status = tar_child.wait();
-
-    // Log any stderr output from tar (non-fatal warnings)
-    if let Some(stderr) = tar_child.stderr.as_mut() {
-        let mut buf = String::new();
-        if std::io::Read::read_to_string(stderr, &mut buf).is_ok() && !buf.trim().is_empty() {
-            println!("cargo:warning=  tar stderr: {}", buf.trim());
-        }
-    }
-
-    match status {
-        Ok(s) if s.success() => {}
-        Ok(s) => {
-            println!("cargo:warning=  tar exited with {s}");
-            if let Err(e) = std::fs::remove_dir_all(&extract_dir) {
-                println!(
-                    "cargo:warning=  Failed to clean up {}: {e}",
-                    extract_dir.display()
-                );
-            }
-            return;
-        }
-        Err(e) => {
-            println!("cargo:warning=  tar wait failed: {e}");
-            if let Err(e) = std::fs::remove_dir_all(&extract_dir) {
-                println!(
-                    "cargo:warning=  Failed to clean up {}: {e}",
-                    extract_dir.display()
-                );
-            }
-            return;
-        }
-    }
-
-    // Find and copy the needed files from the extracted tree
-    copy_ort_files(&extract_dir, &dest_dir, platform);
-
-    // Clean up extraction directory
-    if let Err(e) = std::fs::remove_dir_all(&extract_dir) {
-        println!(
-            "cargo:warning=  Failed to clean up {}: {e}",
-            extract_dir.display()
-        );
-    }
-
-    // Verify all wanted files are present, not just the marker
-    let wanted: &[&str] = match platform {
-        "windows" => &["onnxruntime.dll", "onnxruntime_providers_shared.dll"],
-        "macos" => &["libonnxruntime.dylib"],
-        _ => &[],
-    };
+    // Verify all wanted files are present
     let mut all_ok = true;
     for &name in wanted {
         let path = dest_dir.join(name);
@@ -279,50 +191,65 @@ fn download_ort_libs() {
     }
 }
 
-/// Walk the extracted directory and copy ONNX Runtime shared libraries
-/// into the destination directory.
-fn copy_ort_files(src: &Path, dest: &Path, platform: &str) {
-    let wanted: &[&str] = match platform {
-        "windows" => &["onnxruntime.dll", "onnxruntime_providers_shared.dll"],
-        "macos" => &["libonnxruntime.dylib"],
-        _ => return,
-    };
+/// Extract wanted files from a .zip archive into `dest_dir`.
+fn extract_zip(data: &[u8], dest_dir: &Path, wanted: &[&str]) -> Result<(), String> {
+    let cursor = std::io::Cursor::new(data);
+    let mut archive =
+        zip::ZipArchive::new(cursor).map_err(|e| format!("Failed to open zip: {e}"))?;
 
-    // Recursively search for each wanted file
-    for &name in wanted {
-        if let Some(found) = find_file(src, name) {
-            let dst = dest.join(name);
-            if let Err(e) = std::fs::copy(&found, &dst) {
-                println!("cargo:warning=  Failed to copy {}: {e}", found.display());
-            } else {
-                println!("cargo:warning=  ✓ {name}");
-            }
-        } else {
-            println!("cargo:warning=  ✗ {name} not found in archive — archive structure may have changed");
+    let wanted_set: HashSet<&str> = wanted.iter().copied().collect();
+
+    for i in 0..archive.len() {
+        let mut entry = archive
+            .by_index(i)
+            .map_err(|e| format!("Failed to read zip entry {i}: {e}"))?;
+        let name = entry.name().to_string();
+        // Skip directory entries and non-wanted files
+        if entry.is_dir() {
+            continue;
+        }
+        // Match by filename (e.g. "onnxruntime.dll" inside "onnxruntime-win-x64-1.24.4/lib/")
+        let file_name = Path::new(&name)
+            .file_name()
+            .and_then(|n| n.to_str())
+            .unwrap_or("");
+        if wanted_set.contains(file_name) {
+            let dst = dest_dir.join(file_name);
+            let mut out =
+                std::fs::File::create(&dst).map_err(|e| format!("Failed to create {file_name}: {e}"))?;
+            std::io::copy(&mut entry, &mut out)
+                .map_err(|e| format!("Failed to extract {file_name}: {e}"))?;
+            println!("cargo:warning=  ✓ {file_name}");
         }
     }
+    Ok(())
 }
 
-/// Recursively search `dir` for a file named `name`.
-/// Skips the directory part matching `_extract` (archive root) to avoid
-/// matching deeply nested paths.
-fn find_file(dir: &Path, name: &str) -> Option<PathBuf> {
-    // Walk the directory tree manually to avoid walkdir dependency
-    let mut stack = vec![dir.to_path_buf()];
-    while let Some(path) = stack.pop() {
-        if path.is_dir() {
-            if let Ok(entries) = std::fs::read_dir(&path) {
-                for entry in entries.flatten() {
-                    stack.push(entry.path());
-                }
-            }
-        } else if let Some(fname) = path.file_name() {
-            if fname == name {
-                return Some(path);
-            }
+/// Extract wanted files from a .tar.gz archive into `dest_dir`.
+fn extract_tgz(data: &[u8], dest_dir: &Path, wanted: &[&str]) -> Result<(), String> {
+    let gz = flate2::read::GzDecoder::new(data);
+    let mut archive = tar::Archive::new(gz);
+    let wanted_set: HashSet<&str> = wanted.iter().copied().collect();
+
+    for entry in archive
+        .entries()
+        .map_err(|e| format!("Failed to read tar entries: {e}"))?
+    {
+        let mut entry = entry.map_err(|e| format!("Failed to read tar entry: {e}"))?;
+        let file_name = entry
+            .path()
+            .ok()
+            .and_then(|p| p.file_name().and_then(|n| n.to_str().map(String::from)))
+            .unwrap_or_default();
+        if wanted_set.contains(file_name.as_str()) {
+            let dst = dest_dir.join(&file_name);
+            entry
+                .unpack(&dst)
+                .map_err(|e| format!("Failed to extract {file_name}: {e}"))?;
+            println!("cargo:warning=  ✓ {file_name}");
         }
     }
-    None
+    Ok(())
 }
 
 /// Parsed contents of the `.ort-version` cache sentinel.
