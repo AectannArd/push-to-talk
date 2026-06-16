@@ -126,20 +126,42 @@ fn download_ort_libs() {
     let extract_dir = dest_dir.join("_extract");
     let _ = std::fs::create_dir_all(&extract_dir);
 
-    let status = Command::new("tar")
+    let mut tar_child = match Command::new("tar")
         .arg("xf")
         .arg("-")
         .arg("-C")
         .arg(&extract_dir)
         .stdin(std::process::Stdio::piped())
         .stdout(std::process::Stdio::null())
-        .stderr(std::process::Stdio::null())
+        .stderr(std::process::Stdio::piped())
         .spawn()
-        .and_then(|mut child| {
-            let stdin = child.stdin.as_mut().unwrap();
-            stdin.write_all(&archive_bytes)?;
-            child.wait()
-        });
+    {
+        Ok(child) => child,
+        Err(e) => {
+            println!("cargo:warning=  Failed to spawn tar: {e}");
+            let _ = std::fs::remove_dir_all(&extract_dir);
+            return;
+        }
+    };
+
+    // Feed archive bytes to tar's stdin
+    if let Some(stdin) = tar_child.stdin.as_mut() {
+        if let Err(e) = stdin.write_all(&archive_bytes) {
+            println!("cargo:warning=  Failed to write archive to tar stdin: {e}");
+            let _ = std::fs::remove_dir_all(&extract_dir);
+            return;
+        }
+    }
+
+    let status = tar_child.wait();
+
+    // Log any stderr output from tar (non-fatal warnings)
+    if let Some(stderr) = tar_child.stderr.as_mut() {
+        let mut buf = String::new();
+        if std::io::Read::read_to_string(stderr, &mut buf).is_ok() && !buf.trim().is_empty() {
+            println!("cargo:warning=  tar stderr: {}", buf.trim());
+        }
+    }
 
     match status {
         Ok(s) if s.success() => {}
@@ -149,7 +171,7 @@ fn download_ort_libs() {
             return;
         }
         Err(e) => {
-            println!("cargo:warning=  tar failed: {e}");
+            println!("cargo:warning=  tar wait failed: {e}");
             let _ = std::fs::remove_dir_all(&extract_dir);
             return;
         }
