@@ -209,14 +209,24 @@ impl Punctuator {
             ort::value::Tensor::from_array((shape.clone(), token_ids.into_boxed_slice()))
                 .map_err(|e| anyhow::anyhow!("Failed to create input_ids tensor: {}", e))?;
         let attention_tensor =
-            ort::value::Tensor::from_array((shape, attention_mask.into_boxed_slice()))
+            ort::value::Tensor::from_array((shape.clone(), attention_mask.into_boxed_slice()))
                 .map_err(|e| anyhow::anyhow!("Failed to create attention_mask tensor: {}", e))?;
+        // ONNX Runtime 1.24+ requires token_type_ids for BERT models.
+        // For single-segment input these are all zeros (same shape as input_ids).
+        let token_type_ids: Vec<i64> = vec![0i64; seq_len];
+        let token_type_tensor =
+            ort::value::Tensor::from_array((shape, token_type_ids.into_boxed_slice()))
+                .map_err(|e| anyhow::anyhow!("Failed to create token_type_ids tensor: {}", e))?;
 
         // 3. Run ONNX inference
         let outputs = self
             .session
             .run(
-                ort::inputs!["input_ids" => input_ids_tensor, "attention_mask" => attention_tensor],
+                ort::inputs![
+                    "input_ids" => input_ids_tensor,
+                    "attention_mask" => attention_tensor,
+                    "token_type_ids" => token_type_tensor,
+                ],
             )
             .map_err(|e| anyhow::anyhow!("ONNX inference failed: {}", e))?;
 
