@@ -66,7 +66,9 @@ fn download_ort_libs() {
         return; // unsupported target — skip
     };
 
-    let dest_dir = PathBuf::from("ort-dylibs").join(platform);
+    // ONNX_RT_OUTPUT overrides the default; falls back to target/ort-dylibs
+    let output_root = std::env::var("ONNX_RT_OUTPUT").unwrap_or_else(|_| "target/ort-dylibs".into());
+    let dest_dir = PathBuf::from(output_root).join(platform);
     let version_marker = dest_dir.join(".ort-version");
 
     // Verify all wanted files are present (not just the marker)

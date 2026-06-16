@@ -1,8 +1,8 @@
 {
   "bundle": {
     "resources": {
-      "ort-dylibs/windows/onnxruntime.dll": "./",
-      "ort-dylibs/windows/onnxruntime_providers_shared.dll": "./"
+      "target/ort-dylibs/windows/onnxruntime.dll": "./",
+      "target/ort-dylibs/windows/onnxruntime_providers_shared.dll": "./"
     }
   }
 }

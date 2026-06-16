@@ -9,7 +9,7 @@ mod transcriber;
 mod voice_service;
 
 use serde::{Deserialize, Serialize};
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::sync::OnceLock;
 use std::sync::{
     atomic::{AtomicBool, Ordering},
@@ -851,33 +851,50 @@ fn main() {
     }));
 
     // Discover ONNX Runtime native library for punctuation restoration.
-    // Tauri bundles it as a resource; location varies by platform:
-    //   Windows: next to the .exe
-    //   macOS:   Contents/Resources/ (one level up from MacOS/ binary)
+    // Priority: ORT_DYLIB_PATH env → next to binary (production bundle) →
+    // target/ort-dylibs (development).
     if std::env::var("ORT_DYLIB_PATH").is_err() {
+        // Platform-specific library name
+        #[cfg(target_os = "windows")]
+        let lib_name = "onnxruntime.dll";
+        #[cfg(target_os = "macos")]
+        let lib_name = "libonnxruntime.dylib";
+
+        let mut candidates: Vec<PathBuf> = Vec::new();
+
+        // 1. Next to the executable (production / Tauri bundle)
         if let Ok(exe_path) = std::env::current_exe() {
             if let Some(exe_dir) = exe_path.parent() {
-                // Platform-specific library name and location
-                #[cfg(target_os = "windows")]
-                let (lib_name, search_dir) = ("onnxruntime.dll", exe_dir.to_path_buf());
-
+                candidates.push(exe_dir.join(lib_name));
+                // macOS: also check Contents/Resources/ one level up
                 #[cfg(target_os = "macos")]
-                let (lib_name, search_dir) = {
-                    // Binary: Contents/MacOS/push-to-talk
-                    // Resources: Contents/Resources/libonnxruntime.dylib
-                    let res_dir = exe_dir.parent().map(|p| p.join("Resources"));
-                    (
-                        "libonnxruntime.dylib",
-                        res_dir.unwrap_or_else(|| exe_dir.to_path_buf()),
-                    )
-                };
-
-                let lib_path = search_dir.join(lib_name);
-                if lib_path.exists() {
-                    std::env::set_var("ORT_DYLIB_PATH", lib_path);
-                    // Note: tracing is not initialized yet — the punctuator init
-                    // will log success/failure once logging is up.
+                if let Some(res_dir) = exe_dir.parent().map(|p| p.join("Resources")) {
+                    candidates.push(res_dir.join(lib_name));
                 }
+            }
+        }
+
+        // 2. Default build-script output (development)
+        #[cfg(target_os = "windows")]
+        let dev_dir = "target/ort-dylibs/windows";
+        #[cfg(target_os = "macos")]
+        let dev_dir = "target/ort-dylibs/macos";
+        candidates.push(PathBuf::from(dev_dir).join(lib_name));
+
+        // 3. ONNX_RT_OUTPUT override (same env var build.rs uses)
+        if let Ok(root) = std::env::var("ONNX_RT_OUTPUT") {
+            let platform = if cfg!(target_os = "windows") {
+                "windows"
+            } else {
+                "macos"
+            };
+            candidates.push(PathBuf::from(&root).join(platform).join(lib_name));
+        }
+
+        for lib_path in &candidates {
+            if lib_path.exists() {
+                std::env::set_var("ORT_DYLIB_PATH", lib_path);
+                break;
             }
         }
     }
