@@ -3,6 +3,8 @@
 **/.idea
 **/*.iml
 **/logs
+**/.specify
+**/.claude
 
 **/.nessy
 **/dist
