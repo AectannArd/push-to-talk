@@ -20,17 +20,19 @@ fn download_ort_libs() {
         return;
     };
 
+    const ORT_VERSION: &str = "1.24.4";
+
     let (platform, lib_name, archive_url) = if target.contains("windows") {
         (
             "windows",
             "onnxruntime.dll",
-            "https://github.com/microsoft/onnxruntime/releases/download/v1.20.1/onnxruntime-win-x64-1.20.1.zip",
+            format!("https://github.com/microsoft/onnxruntime/releases/download/v{ORT_VERSION}/onnxruntime-win-x64-{ORT_VERSION}.zip"),
         )
     } else if target.contains("apple") {
         (
             "macos",
             "libonnxruntime.dylib",
-            "https://github.com/microsoft/onnxruntime/releases/download/v1.20.1/onnxruntime-osx-universal2-1.20.1.tgz",
+            format!("https://github.com/microsoft/onnxruntime/releases/download/v{ORT_VERSION}/onnxruntime-osx-arm64-{ORT_VERSION}.tgz"),
         )
     } else {
         return; // unsupported target — skip
