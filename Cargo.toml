@@ -1,6 +1,6 @@
 [package]
 name = "push-to-talk"
-version = "0.1.0"
+version = "0.1.1"
 edition = "2021"
 description = "A tray application that let's you trigger dictation mode in any application you are currently focused on"
 
