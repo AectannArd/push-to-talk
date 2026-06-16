@@ -151,7 +151,9 @@ fn download_ort_libs() {
         Ok(child) => child,
         Err(e) => {
             println!("cargo:warning=  Failed to spawn tar: {e}");
-            let _ = std::fs::remove_dir_all(&extract_dir);
+            if let Err(e) = std::fs::remove_dir_all(&extract_dir) {
+                println!("cargo:warning=  Failed to clean up {}: {e}", extract_dir.display());
+            }
             return;
         }
     };
@@ -160,7 +162,9 @@ fn download_ort_libs() {
     if let Some(stdin) = tar_child.stdin.as_mut() {
         if let Err(e) = stdin.write_all(&archive_bytes) {
             println!("cargo:warning=  Failed to write archive to tar stdin: {e}");
-            let _ = std::fs::remove_dir_all(&extract_dir);
+            if let Err(e) = std::fs::remove_dir_all(&extract_dir) {
+                println!("cargo:warning=  Failed to clean up {}: {e}", extract_dir.display());
+            }
             return;
         }
     }
@@ -179,12 +183,16 @@ fn download_ort_libs() {
         Ok(s) if s.success() => {}
         Ok(s) => {
             println!("cargo:warning=  tar exited with {s}");
-            let _ = std::fs::remove_dir_all(&extract_dir);
+            if let Err(e) = std::fs::remove_dir_all(&extract_dir) {
+                println!("cargo:warning=  Failed to clean up {}: {e}", extract_dir.display());
+            }
             return;
         }
         Err(e) => {
             println!("cargo:warning=  tar wait failed: {e}");
-            let _ = std::fs::remove_dir_all(&extract_dir);
+            if let Err(e) = std::fs::remove_dir_all(&extract_dir) {
+                println!("cargo:warning=  Failed to clean up {}: {e}", extract_dir.display());
+            }
             return;
         }
     }
@@ -193,7 +201,9 @@ fn download_ort_libs() {
     copy_ort_files(&extract_dir, &dest_dir, platform);
 
     // Clean up extraction directory
-    let _ = std::fs::remove_dir_all(&extract_dir);
+    if let Err(e) = std::fs::remove_dir_all(&extract_dir) {
+                println!("cargo:warning=  Failed to clean up {}: {e}", extract_dir.display());
+            }
 
     // Verify all wanted files are present, not just the marker
     let wanted: &[&str] = match platform {
