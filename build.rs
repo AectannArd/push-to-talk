@@ -22,13 +22,33 @@ fn download_ort_libs() {
 
     const ORT_VERSION: &str = "1.24.4";
 
+    // Parse architecture from the target triple (e.g. "x86_64-pc-windows-msvc" → "x86_64")
+    let arch = target.split('-').next().unwrap_or("unknown");
+
     let (platform, lib_name, archive_url) = if target.contains("windows") {
+        let win_arch = match arch {
+            "x86_64" => "x64",
+            "aarch64" => "arm64",
+            other => {
+                println!("cargo:warning=ONNX Runtime: unsupported Windows architecture '{other}' — only x86_64 and aarch64 are supported.");
+                println!("cargo:warning=  Punctuation will be unavailable on this target.");
+                return;
+            }
+        };
         (
             "windows",
             "onnxruntime.dll",
-            format!("https://github.com/microsoft/onnxruntime/releases/download/v{ORT_VERSION}/onnxruntime-win-x64-{ORT_VERSION}.zip"),
+            format!("https://github.com/microsoft/onnxruntime/releases/download/v{ORT_VERSION}/onnxruntime-win-{win_arch}-{ORT_VERSION}.zip"),
         )
     } else if target.contains("apple") {
+        // ONNX Runtime 1.24+ only ships arm64 macOS binaries — Intel Macs are not supported.
+        if arch != "aarch64" {
+            println!(
+                "cargo:warning=ONNX Runtime 1.24+ only provides arm64 macOS binaries. \
+                 Detected architecture '{arch}'. Punctuation will be unavailable."
+            );
+            return;
+        }
         (
             "macos",
             "libonnxruntime.dylib",
