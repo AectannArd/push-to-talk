@@ -5,7 +5,7 @@
 //! downloaded once — subsequent builds reuse the cached files.
 
 use std::io::{Read, Write};
-use std::path::PathBuf;
+use std::path::{PathBuf, Path};
 use std::process::Command;
 
 fn main() {
@@ -253,7 +253,7 @@ fn download_ort_libs() {
 
 /// Walk the extracted directory and copy ONNX Runtime shared libraries
 /// into the destination directory.
-fn copy_ort_files(src: &PathBuf, dest: &PathBuf, platform: &str) {
+fn copy_ort_files(src: &Path, dest: &Path, platform: &str) {
     let wanted: &[&str] = match platform {
         "windows" => &["onnxruntime.dll", "onnxruntime_providers_shared.dll"],
         "macos" => &["libonnxruntime.dylib"],
@@ -278,9 +278,9 @@ fn copy_ort_files(src: &PathBuf, dest: &PathBuf, platform: &str) {
 /// Recursively search `dir` for a file named `name`.
 /// Skips the directory part matching `_extract` (archive root) to avoid
 /// matching deeply nested paths.
-fn find_file(dir: &PathBuf, name: &str) -> Option<PathBuf> {
+fn find_file(dir: &Path, name: &str) -> Option<PathBuf> {
     // Walk the directory tree manually to avoid walkdir dependency
-    let mut stack = vec![dir.clone()];
+    let mut stack = vec![dir.to_path_buf()];
     while let Some(path) = stack.pop() {
         if path.is_dir() {
             if let Ok(entries) = std::fs::read_dir(&path) {
