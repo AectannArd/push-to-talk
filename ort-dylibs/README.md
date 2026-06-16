@@ -1,6 +1,6 @@
 # ONNX Runtime native libraries for push-to-talk
 
-This directory holds ONNX Runtime shared libraries (.dll / .dylib / .so)
+This directory holds ONNX Runtime shared libraries (.dll / .dylib)
 so Tauri can bundle them into the final application.
 
 ## How it works
@@ -9,7 +9,7 @@ so Tauri can bundle them into the final application.
    from [Microsoft ONNX Runtime releases](https://github.com/microsoft/onnxruntime/releases)
    and caches them here.
 2. **Tauri** copies the files into the app bundle via platform-specific configs
-   (`tauri.windows.conf.json`, `tauri.macos.conf.json`, `tauri.linux.conf.json`).
+   (`tauri.windows.conf.json`, `tauri.macos.conf.json`).
 3. **At runtime**, `main()` discovers the DLL next to the executable and sets
    `ORT_DYLIB_PATH` before any ONNX code runs.
 4. **Graceful degradation**: if the DLL or model is missing, punctuation is
@@ -21,7 +21,6 @@ so Tauri can bundle them into the final application.
 |----------|-------|
 | Windows  | `windows/onnxruntime.dll`, `windows/onnxruntime_providers_shared.dll` |
 | macOS    | `macos/libonnxruntime.dylib` |
-| Linux    | `linux/libonnxruntime.so` |
 
 ## Development (`cargo run`)
 
