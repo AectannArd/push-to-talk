@@ -28,7 +28,6 @@ tokenizers = { version = "0.23", features = ["onig"], default-features = false }
 
 # Tauri for GUI with global shortcuts
 tauri = { version = "2", features = ["tray-icon", "image-png", "tracing"] }
-tauri-plugin-shell = "2"
 tauri-plugin-global-shortcut = "2"
 tauri-plugin-single-instance = "2"
 
