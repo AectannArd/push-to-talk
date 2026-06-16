@@ -4,8 +4,9 @@
 //! The native libraries are cached in `ort-dylibs/{platform}/` and only
 //! downloaded once — subsequent builds reuse the cached files.
 
+use std::collections::HashMap;
 use std::io::{Read, Write};
-use std::path::{PathBuf, Path};
+use std::path::{Path, PathBuf};
 use std::process::Command;
 
 fn main() {
@@ -68,31 +69,51 @@ fn download_ort_libs() {
         _ => &[],
     };
 
-    // Already downloaded with correct version — nothing to do
-    let all_present = wanted.iter().all(|name| {
-        let path = dest_dir.join(name);
-        path.exists() && path.metadata().map(|m| m.len() > 0).unwrap_or(false)
-    });
-    if all_present && version_marker.exists() {
-        if let Ok(cached_version) = std::fs::read_to_string(&version_marker) {
-            if cached_version.trim() == ORT_VERSION {
-                println!(
-                    "cargo:warning=ONNX Runtime {} libs already present in {}",
-                    ORT_VERSION,
-                    dest_dir.display()
-                );
-                return;
+    // Check cache: all files present with correct version and sizes
+    if version_marker.exists() {
+        if let Ok(contents) = std::fs::read_to_string(&version_marker) {
+            let cached = parse_version_marker(&contents);
+            if cached.version == ORT_VERSION {
+                let mut valid = true;
+                for &name in wanted {
+                    let path = dest_dir.join(name);
+                    let actual_size = path
+                        .metadata()
+                        .map(|m| m.len())
+                        .unwrap_or(0);
+                    let expected_size = cached
+                        .sizes
+                        .get(name)
+                        .copied()
+                        .unwrap_or(0);
+                    if actual_size == 0 || actual_size != expected_size {
+                        if actual_size > 0 {
+                            println!(
+                                "cargo:warning=  {} size mismatch: expected {expected_size}, got {actual_size}",
+                                name
+                            );
+                        }
+                        valid = false;
+                        break;
+                    }
+                }
+                if valid {
+                    println!(
+                        "cargo:warning=ONNX Runtime {} libs already present in {}",
+                        ORT_VERSION,
+                        dest_dir.display()
+                    );
+                    return;
+                }
             }
         }
     }
-    // Version mismatch or missing files — clean up stale DLLs so we re-download
-    if all_present || version_marker.exists() {
-        println!("cargo:warning=  Cleaning up stale ONNX Runtime cache...");
-        for &name in wanted {
-            let _ = std::fs::remove_file(dest_dir.join(name));
-        }
-        let _ = std::fs::remove_file(&version_marker);
+    // Stale or corrupted cache — clean up
+    println!("cargo:warning=  Cleaning up stale ONNX Runtime cache...");
+    for &name in wanted {
+        let _ = std::fs::remove_file(dest_dir.join(name));
     }
+    let _ = std::fs::remove_file(&version_marker);
 
     // Create destination directory
     if let Err(e) = std::fs::create_dir_all(&dest_dir) {
@@ -238,8 +259,15 @@ fn download_ort_libs() {
         }
     }
     if all_ok {
-        // Write version sentinel so future version bumps force a re-download
-        if let Err(e) = std::fs::write(&version_marker, ORT_VERSION) {
+        // Write version sentinel with file sizes for integrity checks
+        let mut marker_contents = format!("version:{ORT_VERSION}\n");
+        for &name in wanted {
+            let path = dest_dir.join(name);
+            if let Ok(meta) = path.metadata() {
+                marker_contents.push_str(&format!("{name}:{}\n", meta.len()));
+            }
+        }
+        if let Err(e) = std::fs::write(&version_marker, &marker_contents) {
             println!("cargo:warning=  Failed to write version marker: {e}");
         }
         println!(
@@ -295,4 +323,44 @@ fn find_file(dir: &Path, name: &str) -> Option<PathBuf> {
         }
     }
     None
+}
+
+/// Parsed contents of the `.ort-version` cache sentinel.
+struct CachedVersion {
+    version: String,
+    sizes: HashMap<String, u64>,
+}
+
+/// Parse a `.ort-version` file of the form:
+///
+/// ```text
+/// version:1.24.4
+/// onnxruntime.dll:14203464
+/// onnxruntime_providers_shared.dll:22088
+/// ```
+///
+/// Lines using the old format (plain version string only) are treated as
+/// having an empty sizes map, forcing a re-download to populate them.
+fn parse_version_marker(contents: &str) -> CachedVersion {
+    let mut version = String::new();
+    let mut sizes = HashMap::new();
+
+    for line in contents.lines() {
+        let line = line.trim();
+        if line.is_empty() {
+            continue;
+        }
+        if let Some(ver) = line.strip_prefix("version:") {
+            version = ver.to_string();
+        } else if let Some((name, size_str)) = line.split_once(':') {
+            if let Ok(size) = size_str.parse::<u64>() {
+                sizes.insert(name.to_string(), size);
+            }
+        } else {
+            // Old format: plain version string, no sizes
+            version = line.to_string();
+        }
+    }
+
+    CachedVersion { version, sizes }
 }
