@@ -2,7 +2,7 @@
 name = "push-to-talk"
 version = "0.1.0"
 edition = "2021"
-description = "Push-to-talk voice input using Whisper"
+description = "A tray application that let's you trigger dictation mode in any application you are currently focused on"
 
 [dependencies]
 anyhow = "1"
