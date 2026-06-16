@@ -25,7 +25,7 @@ fn download_ort_libs() {
     // Parse architecture from the target triple (e.g. "x86_64-pc-windows-msvc" → "x86_64")
     let arch = target.split('-').next().unwrap_or("unknown");
 
-    let (platform, lib_name, archive_url) = if target.contains("windows") {
+    let (platform, _lib_name, archive_url) = if target.contains("windows") {
         let win_arch = match arch {
             "x86_64" => "x64",
             "aarch64" => "arm64",
@@ -59,14 +59,21 @@ fn download_ort_libs() {
     };
 
     let dest_dir = PathBuf::from("ort-dylibs").join(platform);
-    let marker = dest_dir.join(lib_name);
     let version_marker = dest_dir.join(".ort-version");
 
+    // Verify all wanted files are present (not just the marker)
+    let wanted: &[&str] = match platform {
+        "windows" => &["onnxruntime.dll", "onnxruntime_providers_shared.dll"],
+        "macos" => &["libonnxruntime.dylib"],
+        _ => &[],
+    };
+
     // Already downloaded with correct version — nothing to do
-    if marker.exists()
-        && marker.metadata().map(|m| m.len() > 0).unwrap_or(false)
-        && version_marker.exists()
-    {
+    let all_present = wanted.iter().all(|name| {
+        let path = dest_dir.join(name);
+        path.exists() && path.metadata().map(|m| m.len() > 0).unwrap_or(false)
+    });
+    if all_present && version_marker.exists() {
         if let Ok(cached_version) = std::fs::read_to_string(&version_marker) {
             if cached_version.trim() == ORT_VERSION {
                 println!(
@@ -77,13 +84,14 @@ fn download_ort_libs() {
                 return;
             }
         }
-        // Version mismatch — clean up stale DLLs so we re-download
-        let _ = std::fs::remove_file(&marker);
-        let _ = std::fs::remove_file(&version_marker);
-        // Windows also has the provider DLL
-        if platform == "windows" {
-            let _ = std::fs::remove_file(dest_dir.join("onnxruntime_providers_shared.dll"));
+    }
+    // Version mismatch or missing files — clean up stale DLLs so we re-download
+    if all_present || version_marker.exists() {
+        println!("cargo:warning=  Cleaning up stale ONNX Runtime cache...");
+        for &name in wanted {
+            let _ = std::fs::remove_file(dest_dir.join(name));
         }
+        let _ = std::fs::remove_file(&version_marker);
     }
 
     // Create destination directory
@@ -153,14 +161,28 @@ fn download_ort_libs() {
     // Clean up extraction directory
     let _ = std::fs::remove_dir_all(&extract_dir);
 
-    if marker.exists() && marker.metadata().map(|m| m.len() > 0).unwrap_or(false) {
+    // Verify all wanted files are present, not just the marker
+    let wanted: &[&str] = match platform {
+        "windows" => &["onnxruntime.dll", "onnxruntime_providers_shared.dll"],
+        "macos" => &["libonnxruntime.dylib"],
+        _ => &[],
+    };
+    let mut all_ok = true;
+    for &name in wanted {
+        let path = dest_dir.join(name);
+        if !(path.exists() && path.metadata().map(|m| m.len() > 0).unwrap_or(false)) {
+            println!("cargo:warning=  ✗ {name} missing or empty after extraction",);
+            all_ok = false;
+        }
+    }
+    if all_ok {
         // Write version sentinel so future version bumps force a re-download
         if let Err(e) = std::fs::write(&version_marker, ORT_VERSION) {
             println!("cargo:warning=  Failed to write version marker: {e}");
         }
         println!("cargo:warning=  ✓ ONNX Runtime {} libs ready for bundling", ORT_VERSION);
     } else {
-        println!("cargo:warning=  ✗ Extraction completed but libs not found — check archive structure");
+        println!("cargo:warning=  ✗ Extraction completed but some libs not found — check archive structure");
     }
 }
 
@@ -182,6 +204,8 @@ fn copy_ort_files(src: &PathBuf, dest: &PathBuf, platform: &str) {
             } else {
                 println!("cargo:warning=  ✓ {name}");
             }
+        } else {
+            println!("cargo:warning=  ✗ {name} not found in archive — archive structure may have changed");
         }
     }
 }
