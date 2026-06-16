@@ -60,11 +60,30 @@ fn download_ort_libs() {
 
     let dest_dir = PathBuf::from("ort-dylibs").join(platform);
     let marker = dest_dir.join(lib_name);
+    let version_marker = dest_dir.join(".ort-version");
 
-    // Already downloaded — nothing to do
-    if marker.exists() && marker.metadata().map(|m| m.len() > 0).unwrap_or(false) {
-        println!("cargo:warning=ONNX Runtime libs already present in {}", dest_dir.display());
-        return;
+    // Already downloaded with correct version — nothing to do
+    if marker.exists()
+        && marker.metadata().map(|m| m.len() > 0).unwrap_or(false)
+        && version_marker.exists()
+    {
+        if let Ok(cached_version) = std::fs::read_to_string(&version_marker) {
+            if cached_version.trim() == ORT_VERSION {
+                println!(
+                    "cargo:warning=ONNX Runtime {} libs already present in {}",
+                    ORT_VERSION,
+                    dest_dir.display()
+                );
+                return;
+            }
+        }
+        // Version mismatch — clean up stale DLLs so we re-download
+        let _ = std::fs::remove_file(&marker);
+        let _ = std::fs::remove_file(&version_marker);
+        // Windows also has the provider DLL
+        if platform == "windows" {
+            let _ = std::fs::remove_file(dest_dir.join("onnxruntime_providers_shared.dll"));
+        }
     }
 
     // Create destination directory
@@ -135,7 +154,11 @@ fn download_ort_libs() {
     let _ = std::fs::remove_dir_all(&extract_dir);
 
     if marker.exists() && marker.metadata().map(|m| m.len() > 0).unwrap_or(false) {
-        println!("cargo:warning=  ✓ ONNX Runtime libs ready for bundling");
+        // Write version sentinel so future version bumps force a re-download
+        if let Err(e) = std::fs::write(&version_marker, ORT_VERSION) {
+            println!("cargo:warning=  Failed to write version marker: {e}");
+        }
+        println!("cargo:warning=  ✓ ONNX Runtime {} libs ready for bundling", ORT_VERSION);
     } else {
         println!("cargo:warning=  ✗ Extraction completed but libs not found — check archive structure");
     }
