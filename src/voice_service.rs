@@ -463,9 +463,6 @@ fn paste_from_clipboard() {
     info!("✅ Paste completed");
 }
 
-#[cfg(target_os = "linux")]
-fn paste_from_clipboard() {}
-
 #[cfg(target_os = "macos")]
 fn copy_to_clipboard(text: &str) {
     use objc2_app_kit::NSPasteboard;

@@ -854,7 +854,6 @@ fn main() {
     // Tauri bundles it as a resource; location varies by platform:
     //   Windows: next to the .exe
     //   macOS:   Contents/Resources/ (one level up from MacOS/ binary)
-    //   Linux:   next to the binary
     if std::env::var("ORT_DYLIB_PATH").is_err() {
         if let Ok(exe_path) = std::env::current_exe() {
             if let Some(exe_dir) = exe_path.parent() {
@@ -872,9 +871,6 @@ fn main() {
                         res_dir.unwrap_or_else(|| exe_dir.to_path_buf()),
                     )
                 };
-
-                #[cfg(target_os = "linux")]
-                let (lib_name, search_dir) = ("libonnxruntime.so", exe_dir.to_path_buf());
 
                 let lib_path = search_dir.join(lib_name);
                 if lib_path.exists() {
