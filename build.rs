@@ -4,6 +4,7 @@
 //! The native libraries are cached in `ort-dylibs/{platform}/` and only
 //! downloaded once — subsequent builds reuse the cached files.
 
+use sha2::{Digest, Sha256};
 use std::collections::{HashMap, HashSet};
 use std::io::Read;
 use std::path::{Path, PathBuf};
@@ -21,6 +22,13 @@ fn download_ort_libs() {
     };
 
     const ORT_VERSION: &str = "1.24.4";
+
+    // Expected SHA256 hashes for the downloaded archives (must match ORT_VERSION).
+    // Update these when bumping ORT_VERSION.
+    const EXPECTED_WIN_SHA256: &str =
+        "d2319fddfb6ea4db99ccc4b60c85c517bcd855721f5daa6a06d40d7cb2ee2357";
+    const EXPECTED_MAC_SHA256: &str =
+        "93787795f47e1eee369182e43ed51b9e5da0878ab0346aecf4258979b8bba989";
 
     // Parse architecture from the target triple (e.g. "x86_64-pc-windows-msvc" → "x86_64")
     let arch = target.split('-').next().unwrap_or("unknown");
@@ -149,6 +157,22 @@ fn download_ort_libs() {
         "cargo:warning=  Downloaded {:.1} MB",
         archive_bytes.len() as f64 / (1024.0 * 1024.0)
     );
+
+    // Verify archive integrity before extraction
+    let expected_hash = if platform == "windows" {
+        EXPECTED_WIN_SHA256
+    } else {
+        EXPECTED_MAC_SHA256
+    };
+    let actual_hash = format!("{:x}", Sha256::digest(&archive_bytes));
+    if actual_hash != expected_hash {
+        println!("cargo:warning=  Archive checksum mismatch!");
+        println!("cargo:warning=  Expected: {expected_hash}");
+        println!("cargo:warning=  Got:      {actual_hash}");
+        println!("cargo:warning=  ONNX Runtime will not be bundled — punctuation will be unavailable.");
+        return;
+    }
+    println!("cargo:warning=  ✓ Archive checksum verified");
 
     // Extract in pure Rust — no external tar dependency
     let extract_result = if platform == "windows" {
