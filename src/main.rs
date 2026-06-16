@@ -8,7 +8,7 @@ mod recorder;
 mod transcriber;
 mod voice_service;
 
-use once_cell::sync::OnceCell;
+use std::sync::OnceLock;
 use serde::{Deserialize, Serialize};
 use std::path::Path;
 use std::sync::{
@@ -19,7 +19,7 @@ use tauri::Manager;
 use tauri_plugin_single_instance;
 
 // Global state accessible anywhere
-static APP_STATE: OnceCell<Arc<AppState>> = OnceCell::new();
+static APP_STATE: OnceLock<Arc<AppState>> = OnceLock::new();
 
 pub struct AppState {
     pub voice_service: Arc<Mutex<Option<voice_service::VoiceServiceHandle>>>,
@@ -370,7 +370,7 @@ pub struct DownloadableModel {
 }
 
 /// Static catalog of all models available for download.
-static MODEL_CATALOG: once_cell::sync::Lazy<Vec<DownloadableModel>> = once_cell::sync::Lazy::new(
+static MODEL_CATALOG: std::sync::LazyLock<Vec<DownloadableModel>> = std::sync::LazyLock::new(
     || {
         vec![
             DownloadableModel {
