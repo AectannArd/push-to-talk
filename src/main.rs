@@ -667,12 +667,20 @@ fn init_logging(config: &config::Config) {
         .build(log_dir)
         .expect("Failed to create file appender");
 
+    // Default filter: app at configured level, but suppress ONNX Runtime's
+    // extremely verbose BFC arena / session diagnostics unless explicitly
+    // requested via RUST_LOG=ort=debug or similar.
+    let default_filter = format!(
+        "{},ort=warn,onnxruntime=warn",
+        config.log_level
+    );
     let file_filter =
-        EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new(&config.log_level));
+        EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new(&default_filter));
 
     // Console layer — always human-readable text, INFO level or higher
+    let console_default = format!("info,ort=warn,onnxruntime=warn");
     let console_filter =
-        EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info"));
+        EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new(&console_default));
 
     let console_layer = fmt::layer()
         .with_writer(std::io::stdout)
