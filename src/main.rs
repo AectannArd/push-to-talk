@@ -655,11 +655,11 @@ fn init_logging(config: &config::Config) {
     // Choose file extension and format variant based on config
     let (file_suffix, is_json) = match config.log_format.as_str() {
         "json" => ("json", true),
-        _ => ("txt", false), // default: human-readable text
+        _ => ("log", false), // default: human-readable text
     };
 
     // Create minutely rolling file appender
-    // Filename format: push-to-talk.YYYY-MM-DD-HH-MM.{txt,json}
+    // Filename format: push-to-talk.YYYY-MM-DD-HH-MM.{log,json}
     let file_appender = RollingFileAppender::builder()
         .rotation(Rotation::MINUTELY)
         .filename_prefix("push-to-talk")
