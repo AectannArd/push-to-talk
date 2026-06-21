@@ -131,12 +131,18 @@ transcription, without restarting the app.
 
 ```
 src/
-├── main.rs           Tauri entry point, IPC commands, global state, tray, logging
+├── main.rs           Tauri entry point: bootstrap, plugins, tray, window events
+├── commands.rs       Tauri IPC handlers — 15 #[tauri::command] functions
+├── state.rs          Global state (AppState), DTOs (DeviceDto, ModelDto, StatusDto)
 ├── config.rs         TOML config at ~/.push-to-talk/config.toml
+├── logging.rs        Tracing initialisation, file rotation, log retention
+├── hotkey.rs         Hotkey normalisation (legacy alias translation), shortcut events
+├── models.rs         Whisper model catalog, discovery, download
 ├── recorder.rs       Audio capture via cpal (i16 on Windows, f32 on macOS)
 ├── transcriber.rs    Whisper.cpp wrapper (whisper-cpp-plus), log bridge, greedy decoding
 ├── punctuator.rs     ONNX Runtime BERT model for punctuation/case restoration
-└── voice_service.rs  Background orchestrator: recorder + transcriber + clipboard
+└── voice_service.rs  Background orchestrator: worker thread, transcription thread, device monitor
+build.rs              Downloads ONNX Runtime native libs (cached in target/ort-dylibs/)
 ui/                   React + TypeScript frontend (Vite + Bootstrap Morph dark theme)
 ├── src/components/   UI components (StatusBar, ConfigForm, ModelSelector, etc.)
 ├── src/hooks/        React hooks (useConfig, useStatus, useModels, useDevices)
