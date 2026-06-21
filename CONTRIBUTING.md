@@ -289,11 +289,18 @@ Include:
 
 ```
 src/
-├── main.rs           # Entry point, Tauri commands, global state, logging
+├── main.rs           # Entry point: bootstrap, plugins, tray, window events
+├── commands.rs       # Tauri IPC handlers — 15 #[tauri::command] functions
+├── state.rs          # Global state (AppState), DTOs (DeviceDto, ModelDto, StatusDto)
 ├── config.rs         # Configuration management (TOML)
+├── logging.rs        # Tracing: console + rotating file layers, log retention
+├── hotkey.rs         # Hotkey normalisation, shortcut event handler
+├── models.rs         # Whisper model catalog, discovery, download
 ├── recorder.rs       # Audio recording with cpal
 ├── transcriber.rs    # Whisper.cpp integration
-└── voice_service.rs  # Background service orchestrator, clipboard, transcription loop
+├── punctuator.rs     # ONNX Runtime BERT model for punctuation/case restoration
+└── voice_service.rs  # Background orchestrator: worker thread, transcription, device monitor
+build.rs              # Downloads ONNX Runtime native libs (cached in target/ort-dylibs/)
 ```
 
 ## Release Process
