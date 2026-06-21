@@ -3,10 +3,11 @@
 **/.idea
 **/*.iml
 **/logs
+**/.specify
+**/.claude
 
 **/.nessy
 **/dist
 **/crash_report*
-**/ort-dylibs
 CLAUDE.md
 sample/**

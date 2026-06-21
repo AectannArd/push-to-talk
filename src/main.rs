@@ -8,9 +8,9 @@ mod recorder;
 mod transcriber;
 mod voice_service;
 
-use once_cell::sync::OnceCell;
 use serde::{Deserialize, Serialize};
-use std::path::Path;
+use std::path::{Path, PathBuf};
+use std::sync::OnceLock;
 use std::sync::{
     atomic::{AtomicBool, Ordering},
     Arc, Mutex,
@@ -19,7 +19,7 @@ use tauri::Manager;
 use tauri_plugin_single_instance;
 
 // Global state accessible anywhere
-static APP_STATE: OnceCell<Arc<AppState>> = OnceCell::new();
+static APP_STATE: OnceLock<Arc<AppState>> = OnceLock::new();
 
 pub struct AppState {
     pub voice_service: Arc<Mutex<Option<voice_service::VoiceServiceHandle>>>,
@@ -370,7 +370,7 @@ pub struct DownloadableModel {
 }
 
 /// Static catalog of all models available for download.
-static MODEL_CATALOG: once_cell::sync::Lazy<Vec<DownloadableModel>> = once_cell::sync::Lazy::new(
+static MODEL_CATALOG: std::sync::LazyLock<Vec<DownloadableModel>> = std::sync::LazyLock::new(
     || {
         vec![
             DownloadableModel {
@@ -541,7 +541,11 @@ async fn download_punctuation_model(target_dir: String) -> Result<String, String
 
     let files: &[(&str, &str, &str)] = &[
         ("model.onnx", PUNCTUATION_MODEL_URL, "model.onnx.part"),
-        ("tokenizer.json", PUNCTUATION_TOKENIZER_URL, "tokenizer.json.part"),
+        (
+            "tokenizer.json",
+            PUNCTUATION_TOKENIZER_URL,
+            "tokenizer.json.part",
+        ),
     ];
 
     let client = Client::new();
@@ -560,7 +564,10 @@ async fn download_punctuation_model(target_dir: String) -> Result<String, String
             .map_err(|e| format!("Failed to start download for {name}: {e}"))?;
 
         if !response.status().is_success() {
-            return Err(format!("Download failed for {name}: HTTP {}", response.status()));
+            return Err(format!(
+                "Download failed for {name}: HTTP {}",
+                response.status()
+            ));
         }
 
         let total_size = response.content_length();
@@ -648,11 +655,11 @@ fn init_logging(config: &config::Config) {
     // Choose file extension and format variant based on config
     let (file_suffix, is_json) = match config.log_format.as_str() {
         "json" => ("json", true),
-        _ => ("txt", false), // default: human-readable text
+        _ => ("log", false), // default: human-readable text
     };
 
     // Create minutely rolling file appender
-    // Filename format: push-to-talk.YYYY-MM-DD-HH-MM.{txt,json}
+    // Filename format: push-to-talk.YYYY-MM-DD-HH-MM.{log,json}
     let file_appender = RollingFileAppender::builder()
         .rotation(Rotation::MINUTELY)
         .filename_prefix("push-to-talk")
@@ -660,12 +667,20 @@ fn init_logging(config: &config::Config) {
         .build(log_dir)
         .expect("Failed to create file appender");
 
+    // Default filter: app at configured level, but suppress ONNX Runtime's
+    // extremely verbose BFC arena / session diagnostics unless explicitly
+    // requested via RUST_LOG=ort=debug or similar.
+    let default_filter = format!(
+        "{},ort=warn,onnxruntime=warn",
+        config.log_level
+    );
     let file_filter =
-        EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new(&config.log_level));
+        EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new(&default_filter));
 
     // Console layer — always human-readable text, INFO level or higher
+    let console_default = format!("info,ort=warn,onnxruntime=warn");
     let console_filter =
-        EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info"));
+        EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new(&console_default));
 
     let console_layer = fmt::layer()
         .with_writer(std::io::stdout)
@@ -675,10 +690,11 @@ fn init_logging(config: &config::Config) {
         .with_line_number(false)
         .with_filter(console_filter);
 
-    // File layer — text or JSON depending on config
+    // File layer — text or JSON depending on config, no ANSI escape codes
     let file_layer = {
         let layer = fmt::layer()
             .with_writer(file_appender)
+            .with_ansi(false)
             .with_target(false)
             .with_thread_ids(false)
             .with_file(false)
@@ -844,34 +860,54 @@ fn main() {
     }));
 
     // Discover ONNX Runtime native library for punctuation restoration.
-    // Tauri bundles it as a resource; location varies by platform:
-    //   Windows: next to the .exe
-    //   macOS:   Contents/Resources/ (one level up from MacOS/ binary)
-    //   Linux:   next to the binary
+    // Priority: ORT_DYLIB_PATH env → next to binary (production bundle) →
+    // target/ort-dylibs (development).
     if std::env::var("ORT_DYLIB_PATH").is_err() {
+        // Platform-specific library name
+        #[cfg(target_os = "windows")]
+        let lib_name = "onnxruntime.dll";
+        #[cfg(target_os = "macos")]
+        let lib_name = "libonnxruntime.dylib";
+
+        let mut candidates: Vec<PathBuf> = Vec::new();
+
+        // 1. Next to the executable (production / Tauri bundle)
         if let Ok(exe_path) = std::env::current_exe() {
             if let Some(exe_dir) = exe_path.parent() {
-                // Platform-specific library name and location
-                #[cfg(target_os = "windows")]
-                let (lib_name, search_dir) = ("onnxruntime.dll", exe_dir.to_path_buf());
-
+                candidates.push(exe_dir.join(lib_name));
+                // macOS: also check Contents/Resources/ one level up
                 #[cfg(target_os = "macos")]
-                let (lib_name, search_dir) = {
-                    // Binary: Contents/MacOS/push-to-talk
-                    // Resources: Contents/Resources/libonnxruntime.dylib
-                    let res_dir = exe_dir.parent().map(|p| p.join("Resources"));
-                    ("libonnxruntime.dylib", res_dir.unwrap_or_else(|| exe_dir.to_path_buf()))
-                };
-
-                #[cfg(target_os = "linux")]
-                let (lib_name, search_dir) = ("libonnxruntime.so", exe_dir.to_path_buf());
-
-                let lib_path = search_dir.join(lib_name);
-                if lib_path.exists() {
-                    std::env::set_var("ORT_DYLIB_PATH", lib_path);
-                    // Note: tracing is not initialized yet — the punctuator init
-                    // will log success/failure once logging is up.
+                if let Some(res_dir) = exe_dir.parent().map(|p| p.join("Resources")) {
+                    candidates.push(res_dir.join(lib_name));
                 }
+            }
+        }
+
+        // 2. Default build-script output (development)
+        #[cfg(target_os = "windows")]
+        let platform_subdir = "windows";
+        #[cfg(target_os = "macos")]
+        let platform_subdir = "macos";
+        candidates.push(
+            PathBuf::from("target")
+                .join("ort-dylibs")
+                .join(platform_subdir)
+                .join(lib_name),
+        );
+
+        // 3. ONNX_RT_OUTPUT override (same env var build.rs uses)
+        if let Ok(root) = std::env::var("ONNX_RT_OUTPUT") {
+            candidates.push(
+                PathBuf::from(&root)
+                    .join(platform_subdir)
+                    .join(lib_name),
+            );
+        }
+
+        for lib_path in &candidates {
+            if lib_path.exists() {
+                std::env::set_var("ORT_DYLIB_PATH", lib_path);
+                break;
             }
         }
     }
@@ -912,7 +948,6 @@ fn main() {
     }
 
     tauri::Builder::default()
-        .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_global_shortcut::Builder::new().build())
         .plugin(
             tauri_plugin_single_instance::Builder::new()

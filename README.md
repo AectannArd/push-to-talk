@@ -101,7 +101,7 @@ model_search_dirs = ["D:\\development\\models"]
 hotkey = "Insert"                    # global shortcut
 log_dir = "C:\\Users\\...\\logs"
 log_level = "warn"                   # trace, debug, info, warn, error
-log_format = "text"                  # text (.txt) or json (.json) — file extension matches format
+log_format = "text"                  # text (.log) or json (.json) — file extension matches format
 log_retention_hours = 1
 window_hidden = false                # start minimized to tray
 ```
@@ -165,8 +165,8 @@ If the configured audio device disconnects while recording:
 
 ## Logging
 
-- **Files:** `log_dir/push-to-talk.YYYY-MM-DD-HH-mm.{txt,json}` with 1-minute rotation
-- **Format:** controlled by `log_format` in config — `"text"` produces `.txt` files (human-readable), `"json"` produces `.json` files (structured)
+- **Files:** `log_dir/push-to-talk.YYYY-MM-DD-HH-mm.{log,json}` with 1-minute rotation
+- **Format:** controlled by `log_format` in config — `"text"` produces `.log` files (human-readable), `"json"` produces `.json` files (structured)
 - **Diagnostics:** whisper.cpp internal logging is bridged to `tracing` — at `debug` level, model diagnostics appear in log files
 - **Retention:** files older than `log_retention_hours` are cleaned up hourly
 - **Levels:** default `warn` — shows hotkey registration and diagnostics in log files

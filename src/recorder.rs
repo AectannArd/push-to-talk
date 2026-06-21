@@ -116,8 +116,8 @@ impl Recorder {
     /// Begin capturing audio. Returns a [`Recording`] that can be stopped for the buffer.
     ///
     /// Audio is converted on the fly: multi-channel → mono, native rate → 16 kHz.
-    /// Uses i16 on Windows (native WASAPI integer format) and f32 on macOS/Linux
-    /// (native CoreAudio / ALSA float format). The output buffer always contains
+    /// Uses i16 on Windows (native WASAPI integer format) and f32 on macOS
+    /// (native CoreAudio float format). The output buffer always contains
     /// 16 kHz mono i16 PCM.
     #[cfg(target_os = "windows")]
     pub fn start(&self) -> Result<Recording> {

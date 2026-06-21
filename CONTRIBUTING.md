@@ -42,26 +42,6 @@ Thank you for considering contributing to push-to-talk! This document provides g
   # No additional dependencies required
   ```
 
-  **Linux:**
-  ```bash
-  # Ubuntu/Debian
-  sudo apt-get install -y \
-    libasound2-dev \
-    libudev-dev \
-    libxcb1-dev \
-    libxcb-render0-dev \
-    libxcb-shape0-dev \
-    libxcb-xfixes0-dev \
-    pkg-config
-
-  # Fedora
-  sudo dnf install -y \
-    alsa-lib-devel \
-    libudev-devel \
-    libxcb-devel \
-    pkg-config
-  ```
-
   **Windows:**
   ```bash
   # No additional dependencies required
@@ -163,6 +143,35 @@ The application includes a menu bar tray icon on macOS for quick access.
 - Configure... menu item (opens Tauri GUI)
 - Quit application menu item
 
+### ONNX Runtime (Punctuation)
+
+Push-to-talk uses ONNX Runtime for punctuation and case restoration. The native
+libraries are downloaded automatically by `build.rs` during the first build and
+cached in `target/ort-dylibs/{platform}/`.
+
+**Default location:** `target/ort-dylibs/`
+
+| Platform | Files |
+|----------|-------|
+| Windows  | `target/ort-dylibs/windows/onnxruntime.dll`, `onnxruntime_providers_shared.dll` |
+| macOS    | `target/ort-dylibs/macos/libonnxruntime.dylib` |
+
+Override the output directory with the `ONNX_RT_OUTPUT` environment variable:
+
+```bash
+ONNX_RT_OUTPUT=/custom/path cargo build
+```
+
+During development (`cargo run` / `cargo tauri dev`), the DLL is discovered
+automatically from `target/ort-dylibs/`. In production builds, Tauri bundles
+the DLLs next to the executable.
+
+The punctuation model (`model.onnx` + `tokenizer.json`) is published separately
+on HuggingFace at [Aectann/punctuation-case-model](https://huggingface.co/Aectann/punctuation-case-model).
+Users download it via the Push-to-Talk UI or manually into
+`~/.push-to-talk/models/punctuator/`. If the DLL or model is missing,
+punctuation is silently disabled and raw transcription text is used.
+
 ### Build Commands
 
 ```bash
@@ -210,7 +219,7 @@ chore: update dependencies
 
 - Write tests for new features
 - Ensure all tests pass: `cargo test`
-- Test on your platform (macOS/Linux/Windows)
+- Test on your platform (macOS or Windows)
 
 ### Documentation
 
@@ -244,7 +253,6 @@ Brief description of changes
 ## Testing
 Describe how you tested these changes:
 - [ ] Tested on macOS
-- [ ] Tested on Linux
 - [ ] Tested on Windows
 
 ## Related Issues
@@ -263,7 +271,7 @@ Closes #ISSUE_NUMBER (if applicable)
 ### Bug Reports
 
 Include:
-- **Platform:** macOS/Linux/Windows + version
+- **Platform:** macOS or Windows + version
 - **Rust version:** `rustc --version`
 - **Steps to reproduce:** Clear, numbered steps
 - **Expected behavior:** What should happen
