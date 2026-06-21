@@ -24,10 +24,10 @@
 //! ```
 
 use crate::config::Config;
+use crate::models;
 use crate::recorder::Recording;
 use crate::transcriber::Transcriber;
 
-use std::path::Path;
 use std::sync::mpsc;
 use std::sync::{
     atomic::{AtomicBool, Ordering},
@@ -83,7 +83,7 @@ impl VoiceServiceHandle {
         punctuator: Arc<Mutex<Option<crate::punctuator::Punctuator>>>,
     ) -> Result<Self, anyhow::Error> {
         // ── Load model ───────────────────────────────────────────────
-        let model_path = match find_model(&config) {
+        let model_path = match models::find_whisper_model(&config) {
             Some(p) => p,
             None => return Err(anyhow::anyhow!("Model not found")),
         };
@@ -197,11 +197,6 @@ impl VoiceServiceHandle {
             monitor_handle: Some(monitor_handle),
             state,
         })
-    }
-
-    /// Whether a recording is currently in progress.
-    pub fn is_recording(&self) -> bool {
-        self.state.is_recording.load(Ordering::Relaxed)
     }
 
     /// Tell the worker to begin capturing audio.
@@ -373,56 +368,6 @@ fn monitor_device_changes(
             }
         }
     }
-}
-
-// ── Model discovery ──────────────────────────────────────────────────
-
-/// Enumerate all ggml-*.bin model files found in the given directories.
-pub fn list_ggml_models(dirs: &[String]) -> Vec<std::path::PathBuf> {
-    let mut seen = std::collections::HashSet::new();
-    let mut paths = Vec::new();
-    for dir in dirs {
-        let expanded = shellexpand::tilde(dir);
-        let base = std::path::Path::new(expanded.as_ref());
-        // Primary: <dir>/transcriber/
-        let transcriber_dir = base.join("transcriber");
-        scan_ggml_dir(&transcriber_dir, &mut paths, &mut seen);
-        // Backward compat: <dir>/
-        scan_ggml_dir(base, &mut paths, &mut seen);
-    }
-    paths
-}
-
-fn scan_ggml_dir(
-    dir: &std::path::Path,
-    paths: &mut Vec<std::path::PathBuf>,
-    seen: &mut std::collections::HashSet<String>,
-) {
-    if !dir.exists() {
-        return;
-    }
-    if let Ok(entries) = std::fs::read_dir(dir) {
-        for entry in entries.flatten() {
-            let name = entry.file_name();
-            let name_str = name.to_string_lossy().to_string();
-            if name_str.starts_with("ggml-") && name_str.ends_with(".bin") {
-                if seen.insert(name_str) {
-                    paths.push(entry.path());
-                }
-            }
-        }
-    }
-}
-
-fn find_model(config: &Config) -> Option<std::path::PathBuf> {
-    if let Some(ref model) = config.model {
-        if Path::new(model).exists() {
-            return Some(std::path::PathBuf::from(model));
-        }
-    }
-    list_ggml_models(&config.model_search_dirs)
-        .into_iter()
-        .next()
 }
 
 // ── Platform-specific clipboard & paste ──────────────────────────────
