@@ -93,9 +93,24 @@ impl VoiceServiceHandle {
         let tr = Arc::new(Mutex::new(transcriber));
 
         // ── Initialize recorder ──────────────────────────────────────
-        let (recorder, _device_info) = crate::recorder::Recorder::new(config.device_id.as_deref())
+        let (recorder, fallback_device) = crate::recorder::Recorder::new(config.device_id.as_deref())
             .map_err(|e| anyhow::anyhow!("Failed to initialize recorder: {}", e))?;
         let rec = Arc::new(Mutex::new(recorder));
+
+        // If the configured device wasn't found and we fell back to the
+        // default, persist the new device ID so the next start uses it.
+        if let Some((new_id, new_name)) = fallback_device {
+            let mut cfg = app_config.lock().unwrap();
+            tracing::warn!(
+                "Configured device not found — fell back to: {} ({})",
+                new_name,
+                new_id,
+            );
+            cfg.device_id = Some(new_id);
+            cfg.device_name = Some(new_name);
+            let config_path = crate::config::default_path();
+            cfg.save(&config_path);
+        }
 
         // ── Channels ─────────────────────────────────────────────────
         let (audio_tx, audio_rx) = mpsc::channel::<Vec<i16>>();
