@@ -885,19 +885,23 @@ fn main() {
 
         // 2. Default build-script output (development)
         #[cfg(target_os = "windows")]
-        let dev_dir = "target/ort-dylibs/windows";
+        let platform_subdir = "windows";
         #[cfg(target_os = "macos")]
-        let dev_dir = "target/ort-dylibs/macos";
-        candidates.push(PathBuf::from(dev_dir).join(lib_name));
+        let platform_subdir = "macos";
+        candidates.push(
+            PathBuf::from("target")
+                .join("ort-dylibs")
+                .join(platform_subdir)
+                .join(lib_name),
+        );
 
         // 3. ONNX_RT_OUTPUT override (same env var build.rs uses)
         if let Ok(root) = std::env::var("ONNX_RT_OUTPUT") {
-            let platform = if cfg!(target_os = "windows") {
-                "windows"
-            } else {
-                "macos"
-            };
-            candidates.push(PathBuf::from(&root).join(platform).join(lib_name));
+            candidates.push(
+                PathBuf::from(&root)
+                    .join(platform_subdir)
+                    .join(lib_name),
+            );
         }
 
         for lib_path in &candidates {
