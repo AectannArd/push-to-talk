@@ -4,6 +4,11 @@
 .form-control, .form-select { color: #999 !important; }
 ::placeholder { color: var(--bs-body-color) !important; opacity: .55; }
 
+/* Tabs inside card-header should be flush with card-body below */
+.card-header:has(.nav-tabs) {
+  border-radius: var(--bs-card-inner-border-radius) var(--bs-card-inner-border-radius) 0 0;
+}
+
 /* ── Language switcher (dark neumorphic) ─────────── */
 .lang-select { position: relative; display: inline-block; user-select: none; }
 .lang-select-trigger {
